@@ -1,0 +1,239 @@
+<!doctype html>
+<!--
+  myFinance landing page TEMPLATE.
+
+  This file is published to the gh-pages branch of tokans/myFinance by the
+  "Update GitHub Pages site" step in .github/workflows/release.yml on every
+  release (i.e. every deploy.bat run).
+
+  EDIT THIS FILE to change the site. The workflow substitutes these tokens
+  before publishing — keep them spelled exactly:
+     v1.0.0-rc.2       e.g. v1.2.3
+     tokans/myFinance          e.g. tokans/myFinance
+     https://github.com/tokans/myFinance/releases/tag/v1.0.0-rc.2   link to this version's release page
+     https://github.com/tokans/myFinance/releases/latest    link to the "latest release" redirect
+
+  The current release's notes are NOT baked in: the page fetches the sibling
+  release-notes.md (written by the workflow) and renders it client-side.
+
+  To preview locally, run .github/pages/preview.bat — it fills in sample
+  values, drops a sample release-notes.md next to it, and serves over HTTP
+  (fetch() does not work from file://).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>myFinance — your money, on your machine</title>
+  <meta name="description" content="A private, offline-first personal finance tracker. No account, no cloud, no server. Your data never leaves your device." />
+  <style>
+    :root {
+      --bg: #0b0f17; --panel: #131a26; --panel-2: #1a2332;
+      --text: #e7ecf3; --muted: #94a3b8; --brand: #4ade80;
+      --brand-2: #38bdf8; --border: #243044; --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    a { color: var(--brand-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    header.nav {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: blur(10px);
+      background: rgba(11,15,23,.7);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+    .brand .dot { width: 12px; height: 12px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+    .nav nav a { color: var(--muted); margin-left: 22px; font-size: 14px; }
+    .nav nav a:hover { color: var(--text); text-decoration: none; }
+    .hero {
+      position: relative; text-align: center; padding: 96px 0 72px;
+      background:
+        radial-gradient(60% 50% at 50% 0%, rgba(74,222,128,.12), transparent 70%),
+        radial-gradient(50% 50% at 80% 20%, rgba(56,189,248,.10), transparent 70%);
+    }
+    .pill {
+      display: inline-block; padding: 6px 14px; border: 1px solid var(--border);
+      border-radius: 999px; color: var(--muted); font-size: 13px; margin-bottom: 22px;
+    }
+    .pill b { color: var(--brand); }
+    .hero h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.05; margin: 0 0 18px; letter-spacing: -.02em; }
+    .hero h1 .grad { background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero p.sub { font-size: clamp(16px, 2.5vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+    .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px;
+      border-radius: 12px; font-weight: 600; border: 1px solid transparent;
+    }
+    .btn.primary { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #06210f; }
+    .btn.primary:hover { text-decoration: none; filter: brightness(1.05); }
+    .btn.ghost { border-color: var(--border); color: var(--text); }
+    .btn.ghost:hover { text-decoration: none; border-color: var(--muted); }
+    section { padding: 64px 0; }
+    section h2 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 10px; letter-spacing: -.01em; }
+    section .lead { color: var(--muted); margin: 0 0 36px; max-width: 640px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 24px; transition: transform .15s ease, border-color .15s ease;
+    }
+    .card:hover { transform: translateY(-3px); border-color: var(--brand); }
+    .card .ico { font-size: 28px; margin-bottom: 12px; }
+    .card h3 { margin: 0 0 6px; font-size: 18px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    table.dl { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; }
+    table.dl th, table.dl td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    table.dl th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+    table.dl tr:last-child td { border-bottom: none; }
+    code { background: var(--panel-2); padding: 2px 7px; border-radius: 6px; font-size: 13px; color: var(--brand); }
+    .demo { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .demo video { display: block; width: 100%; height: auto; background: #000; }
+    .demo figcaption { padding: 12px 18px; color: var(--muted); font-size: 14px; }
+    .notes { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 32px; }
+    .notes :is(h1,h2,h3) { margin-top: 1.2em; }
+    .notes h1 { font-size: 22px; } .notes h2 { font-size: 19px; } .notes h3 { font-size: 17px; }
+    .notes ul { padding-left: 22px; } .notes li { margin: 4px 0; }
+    .notes a { word-break: break-word; }
+    .privacy { background: linear-gradient(135deg, rgba(74,222,128,.06), rgba(56,189,248,.06));
+      border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; text-align: center; }
+    footer { border-top: 1px solid var(--border); color: var(--muted); padding: 32px 0; text-align: center; font-size: 14px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <div class="brand"><span class="dot"></span> myFinance</div>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="#demo">Demo</a>
+        <a href="#whatsnew">What's new</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="wrap">
+      <span class="pill">Latest release · <b>v1.0.0-rc.2</b></span>
+      <h1>Your money,<br><span class="grad">on your machine.</span></h1>
+      <p class="sub">A private, offline-first personal finance tracker. No account, no cloud,
+        no server — your data never leaves your device.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/tokans/myFinance/releases/latest">⬇ Download for your platform</a>
+        <a class="btn ghost" href="https://github.com/tokans/myFinance">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Everything, nothing leaves your device</h2>
+      <p class="lead">myFinance keeps the full picture of your finances locally, encrypted, and
+        in a format you already own.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">📊</div><h3>Net worth over time</h3>
+          <p>Monthly snapshots of every account, with month-over-month and financial-year trends.</p></div>
+        <div class="card"><div class="ico">📁</div><h3>Excel in, Excel out</h3>
+          <p>Import your existing spreadsheet and export back to it. Excel stays the source of truth you own.</p></div>
+        <div class="card"><div class="ico">🎯</div><h3>Goals &amp; projections</h3>
+          <p>Set targets and see realistic ETAs based on your actual saving pace.</p></div>
+        <div class="card"><div class="ico">🧾</div><h3>Tax helper</h3>
+          <p>Import official ITR JSON exports and get an advisory ITR-form recommendation.</p></div>
+        <div class="card"><div class="ico">🔐</div><h3>Encrypted vault</h3>
+          <p>Account credentials protected by a master password (Argon2id + Stronghold). No plain text, ever.</p></div>
+        <div class="card"><div class="ico">🔥</div><h3>FIRE calculator</h3>
+          <p>Project your path to Financial Independence / Retire Early — target corpus, safe withdrawal, and the age you get there.</p></div>
+        <div class="card"><div class="ico">🛟</div><h3>Emergency &amp; estate planning</h3>
+          <p>Size your emergency fund against real expenses, and keep nominee and estate details organised for the people who'll need them.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <h2>Download</h2>
+      <p class="lead">Grab the installer for your platform. All assets for this version are attached to the
+        <a href="https://github.com/tokans/myFinance/releases/tag/v1.0.0-rc.2">v1.0.0-rc.2 release</a>.</p>
+      <table class="dl">
+        <thead><tr><th>Platform</th><th>File</th></tr></thead>
+        <tbody>
+          <tr><td>Windows</td><td><code>.msi</code> / <code>.exe</code> installer</td></tr>
+          <tr><td>macOS (Apple Silicon)</td><td><code>.dmg</code> (arm64)</td></tr>
+          <tr><td>macOS (Intel)</td><td><code>.dmg</code> (x64)</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:18px"><a class="btn primary" href="https://github.com/tokans/myFinance/releases/latest">⬇ Go to the latest release</a></p>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="wrap">
+      <h2>See it in action</h2>
+      <p class="lead">A quick walkthrough — importing an existing spreadsheet and watching your
+        net worth come together. No setup, no account.</p>
+      <figure class="demo" id="demo-figure">
+        <video src="assets/demo.mp4" autoplay muted loop playsinline controls preload="metadata"></video>
+        <figcaption>Importing a spreadsheet in myFinance.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="whatsnew">
+    <div class="wrap">
+      <h2>What's new in v1.0.0-rc.2</h2>
+      <p class="lead">Full notes also live on the <a href="https://github.com/tokans/myFinance/releases/tag/v1.0.0-rc.2">release page</a>.</p>
+      <div class="notes" id="notes">Loading release notes…</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="privacy">
+        <h2 style="margin-top:0">No backend. No telemetry.</h2>
+        <p style="color:var(--muted); max-width:620px; margin:0 auto">All data lives in a local SQLite
+          database and an encrypted vault on your own machine. myFinance can't phone home — there's nowhere for it to call.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      myFinance · <a href="https://github.com/tokans/myFinance/releases/tag/v1.0.0-rc.2">v1.0.0-rc.2</a> ·
+      <a href="https://github.com/tokans/myFinance">GitHub</a><br>
+      This site is generated automatically on each release.
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    // Render this release's notes from the sibling markdown file.
+    fetch('release-notes.md')
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (md) {
+        var el = document.getElementById('notes');
+        el.innerHTML = md && window.marked
+          ? marked.parse(md)
+          : '<p>See the <a href="https://github.com/tokans/myFinance/releases/tag/v1.0.0-rc.2">release page</a> for notes.</p>';
+      })
+      .catch(function () {});
+
+    // Hide the demo section entirely if the video can't be loaded.
+    var demoVideo = document.querySelector('#demo-figure video');
+    if (demoVideo) {
+      demoVideo.addEventListener('error', function () {
+        document.getElementById('demo').classList.add('hidden');
+      });
+    }
+  </script>
+</body>
+</html>
