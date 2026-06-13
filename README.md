@@ -29,7 +29,7 @@ Grab the installer for your platform from the
 | macOS (Intel + Apple Silicon) | universal `.dmg` |
 
 All assets for this version are attached to the
-[v1.0.0-rc.2 release](https://github.com/tokans/myFinance/releases/tag/v1.0.0-rc.2).
+[v1.0.0 release](https://github.com/tokans/myFinance/releases/tag/v1.0.0).
 
 ## Privacy
 
@@ -38,9 +38,9 @@ SQLite database and an encrypted vault on your own machine.
 
 ---
 
-## Release notes — v1.0.0-rc.2
+## Release notes — v1.0.0
 
-**Full Changelog**: https://github.com/tokans/myFinance/commits/v1.0.0-rc.2
+**Full Changelog**: https://github.com/tokans/myFinance/compare/v1.0.0-rc.2...v1.0.0
 
 ---
 
