@@ -136,14 +136,22 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS signing + notarization. No-op on Windows and no-op when the
-          # secrets are unset (then the .dmg is built unsigned).
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS signing + notarization is DISABLED — the .dmg ships unsigned
+          # (macOS users right-click → Open once). Passing APPLE_CERTIFICATE made
+          # tauri-action run `security import`, which HARD-FAILS the required
+          # macOS build whenever the cert is invalid or an inherited org/env
+          # secret is malformed — blocking the whole release. We deliberately do
+          # NOT reference secrets.APPLE_* here so no import is attempted, no
+          # matter what secrets exist at repo/org/environment scope.
+          #
+          # To re-enable signing later: restore valid APPLE_* secrets on this
+          # repo and uncomment the block below.
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: myFinance
           args: ${{ matrix.args }}
