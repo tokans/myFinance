@@ -86,8 +86,10 @@ jobs:
     steps:
       # The app consumes the PUBLIC sibling sharedCoreLib via a file:../ path.
       # @mydemo/core is an OPTIONAL dep (demo rig only) and is intentionally NOT
-      # checked out — `npm ci --omit=optional` skips it, so the public build
-      # depends on public repos only.
+      # checked out — plain `npm ci` skips a missing optional file: dep, so the
+      # public build depends on public repos only. Do NOT add --omit=optional:
+      # it would also drop rolldown's platform-native bundler binding
+      # (@rolldown/binding-*), which `vite build` needs, breaking the build.
       - name: Check out myFinance (this public repo)
         uses: actions/checkout@v4
         with:
@@ -122,8 +124,10 @@ jobs:
         run: npm ci
 
       - name: Install npm dependencies
-        # --omit=optional skips the private @mydemo/core demo rig (absent here).
-        run: npm ci --omit=optional
+        # Plain `npm ci` skips the absent optional @mydemo/core sibling but keeps
+        # rolldown's platform-native binding (do NOT use --omit=optional — it
+        # drops @rolldown/binding-* and breaks `vite build`).
+        run: npm ci
 
       # tauri-action runs `npm run build` (beforeBuildCommand) + `tauri build`,
       # then exposes the produced bundle paths as `artifactPaths`.
@@ -313,7 +317,9 @@ jobs:
         run: npm ci
 
       - name: Install npm dependencies
-        run: npm ci --omit=optional
+        # Plain `npm ci` (NOT --omit=optional, which would drop rolldown's
+        # platform-native @rolldown/binding-* and break `vite build`).
+        run: npm ci
 
       # libsodium.a for Android — built version-exact in a Linux container, same
       # as build-android.bat does locally. The image cross-compiles every ABI;
@@ -414,7 +420,9 @@ jobs:
         run: npm ci
 
       - name: Install npm dependencies
-        run: npm ci --omit=optional
+        # Plain `npm ci` (NOT --omit=optional, which would drop rolldown's
+        # platform-native @rolldown/binding-* and break `vite build`).
+        run: npm ci
 
       # gen/apple is gitignored, so regenerate the Xcode project each run, then
       # inject the LAN-sync Info.plist keys the app needs.
