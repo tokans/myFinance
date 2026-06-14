@@ -1,0 +1,230 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  tax-wizard.yaml — ITR form recommendation wizard                           ║
+# ║  Source: src/pages/TaxWizard.tsx + src/tax/recommendItr.ts                  ║
+# ║                                                                              ║
+# ║  13 questions (12 yes/no + 1 number), then a recommendation page.           ║
+# ║  Question #5 (hasPresumptiveOnly) only applies if hasBusinessIncome=true.   ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_tax_wizard
+manifest_version: "1.0.0"
+description: Picks an ITR form (1 / 2 / 3 / 4) based on a deterministic decision tree.
+
+conditions:
+
+  has_business_income:
+    description: User reported business / professional income
+    condition: { field: has_business_income, op: is_true }
+
+forms:
+
+  tax_form_picker:
+    title: ITR form picker
+    description: A short questionnaire — output is informational, verify with a CA before filing.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Confidential
+    layout:
+      type: wizard
+      progress: bar
+      one_question_per_page: true
+    state:
+      persistence: tauri-fs    # bound to db.tax wizard_answers table
+      auto_save: true
+      draft_key:
+        computed: "'tax_wizard_' + $context.ay"
+    submit_label: { computed: "'Save for AY ' + $context.ay" }
+    on_submit:
+      type: local
+      handler_name: db.tax.upsertWizardAnswers
+
+    pages:
+
+      # ── Questions 1–13 ───────────────────────────────────────────────────
+      - id: q_individual
+        title: Question 1 of 13
+        sections:
+          - fields:
+              - id: is_individual
+                type: boolean
+                label: Are you filing as an individual (not HUF, firm, LLP, company)?
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_resident
+        title: Question 2 of 13
+        sections:
+          - fields:
+              - id: is_resident
+                type: boolean
+                label: Are you a resident in India for tax purposes?
+                hint: 183+ days in India during the financial year (with other tests).
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_total_income
+        title: Question 3 of 13
+        sections:
+          - fields:
+              - id: total_income
+                type: number
+                label: Estimated total annual income (after exemptions)?
+                hint: Salary + house property + capital gains + other sources.
+                required: true
+                number_type: decimal2
+                min: 0
+                prefix: { context: currency }
+
+      - id: q_business
+        title: Question 4 of 13
+        sections:
+          - fields:
+              - id: has_business_income
+                type: boolean
+                label: Did you have business or professional income?
+                hint: Includes freelancing, consulting, proprietorship, professional fees.
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_presumptive
+        title: Question 5 of 13
+        # Only relevant if business income was declared.
+        condition: { ref: has_business_income }
+        sections:
+          - fields:
+              - id: has_presumptive_only
+                type: boolean
+                label: Is ALL of that business income under the presumptive scheme (44AD / 44ADA / 44AE)?
+                hint: Skip if you said No above.
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_capital_gains
+        title: Question 6 of 13
+        sections:
+          - fields:
+              - id: has_capital_gains
+                type: boolean
+                label: "Any capital gains? (sold shares, mutual funds, property, gold, crypto)"
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_multiple_houses
+        title: Question 7 of 13
+        sections:
+          - fields:
+              - id: has_multiple_houses
+                type: boolean
+                label: Do you have income from more than one house property?
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_foreign
+        title: Question 8 of 13
+        sections:
+          - fields:
+              - id: has_foreign_assets_or_income
+                type: boolean
+                label: Any foreign assets or foreign income during the year?
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_director
+        title: Question 9 of 13
+        sections:
+          - fields:
+              - id: is_director
+                type: boolean
+                label: Were you a director in any company during the year?
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_unlisted
+        title: Question 10 of 13
+        sections:
+          - fields:
+              - id: has_unlisted_shares
+                type: boolean
+                label: "Did you hold unlisted equity shares (private companies, ESOPs of unlisted)?"
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_agri
+        title: Question 11 of 13
+        sections:
+          - fields:
+              - id: agri_income_above_5000
+                type: boolean
+                label: Agricultural income above ₹5,000?
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_winnings
+        title: Question 12 of 13
+        sections:
+          - fields:
+              - id: has_winnings
+                type: boolean
+                label: Winnings from lotteries, races, gambling or game shows?
+                display_as: yes-no-radio
+                required: true
+
+      - id: q_losses
+        title: Question 13 of 13
+        sections:
+          - fields:
+              - id: has_brought_forward_losses
+                type: boolean
+                label: Brought-forward losses from earlier years to set off?
+                display_as: yes-no-radio
+                required: true
+
+      # ── Recommendation (read-only computed result) ───────────────────────
+      - id: recommendation
+        title: Recommendation
+        sections:
+
+          - id: result
+            display: read-only
+            description:
+              computed: "'Likely form: ITR-' + (computed.recommendation.form ?? '—')"
+            fields:
+              - id: recommendation_computed
+                type: hidden
+                source: computed
+                value:
+                  expression: "tax.recommendItr(fields)"
+
+              - id: reasons
+                type: hidden
+                source: computed
+                value:
+                  expression: "computed.recommendation.reasons"
+
+          - id: blocked_from_itr1
+            condition: { expression: "computed.recommendation.blockedFromItr1.length > 0" }
+            display: read-only
+            description: "Why not ITR-1"
+            fields:
+              - id: blocked_reasons
+                type: hidden
+                source: computed
+                value:
+                  expression: "computed.recommendation.blockedFromItr1"
+
+          - id: disclaimer
+            display: read-only
+            description: This is informational only — verify with a Chartered Accountant before filing.
+
+        actions:
+          - { id: save, type: button, label: { computed: "'Save for AY ' + $context.ay" },
+              enabled_if: { expression: "computed.recommendation.form != null" },
+              on_action: { type: local, handler_name: db.tax.upsertWizardAnswers } }
+          - { id: edit, type: nav-prev, label: Edit answers, icon: check-circle }
+
+    # Hidden context fields surfaced inside the form
+    sections_meta:
+      - id: ay
+        type: hidden
+        source: context
+        value: ay

@@ -1,0 +1,57 @@
+# Suite security gate — runs the sharedcorelib publisher checks on every push/PR.
+# Originally scaffolded into the app by `publisher-ci init`, then adapted for this
+# monorepo: `sharedcorelib-publisher-ci` (and `sharedcorelib`) are consumed via
+# `file:../` sibling paths, NOT the npm registry. So before `npm ci` can install
+# them — and before `npx sharedcorelib-publisher-ci` can find the binary in
+# node_modules/.bin instead of trying (and failing) to fetch it from the registry —
+# the sibling repos must be laid out next to the app, exactly like build-release.yml's
+# build job does. PUBLISH_TOKEN (classic PAT) authenticates the cross-repo checkout.
+# Note: @mydemo/core is an OPTIONAL dep (demo rig only), so it is NOT checked out
+# here — `npm ci --omit=optional` skips it.
+name: security
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  sharedcorelib-security:
+    # Dev-repo gate only. This file is mirrored to the public repo too, but the
+    # check (PUBLISH_TOKEN-authenticated sibling checkout) belongs where dev
+    # happens; in tokans it skips.
+    if: github.repository == 'anshumandas/myFinance'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: myFinance
+    steps:
+      - name: Check out myFinance (source)
+        uses: actions/checkout@v4
+        with:
+          path: myFinance
+      # `sharedcorelib-publisher-ci` lives at sharedCoreLib/publisher-ci, so checking
+      # out sharedCoreLib brings the toolkit along (file:../sharedCoreLib/publisher-ci).
+      - name: Check out sharedCoreLib (file:../sharedCoreLib + publisher-ci)
+        uses: actions/checkout@v4
+        with:
+          repository: tokans/sharedCoreLib
+          ref: master
+          path: sharedCoreLib
+          token: ${{ secrets.PUBLISH_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: myFinance/package-lock.json
+
+      # Installs devDeps too, so the toolkit (the file: sibling) lands in
+      # node_modules/.bin where `npx` resolves it locally — no registry lookup.
+      # --omit=optional skips the private @mydemo/core demo rig (not checked out).
+      - name: Install npm dependencies
+        run: npm ci --omit=optional
+
+      # Fails the build on any finding at or above the configured threshold (default: high).
+      - name: Run publisher security checks
+        run: npx sharedcorelib-publisher-ci check

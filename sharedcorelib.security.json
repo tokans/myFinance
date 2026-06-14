@@ -1,0 +1,34 @@
+{
+  "$comment": "sharedcorelib security policy for THIS app. See publisher-ci/README.md.",
+  "coreVersion": "1.0.0",
+  "deprecationWindow": 3,
+  "trustManifest": "publisher.trust.json",
+  "releaseSigning": "release.signing.json",
+  "deprecations": "deprecations.json",
+  "source": {
+    "include": ["src", "src-tauri/src"],
+    "$ignoreComment": "src/tax/schemas holds static JSON-Schema definitions for offline ITR-export parsing; their only http:// strings are the canonical draft-04 dialect identifier (an opaque ID, never network-fetched). JSON cannot carry an inline publisher-ci-ignore comment, so the dir is allowlisted here. No network/crypto code lives there.",
+    "ignore": ["schemas"]
+  },
+  "kdf": {
+    "minPbkdf2Iterations": 600000,
+    "requireFormatHeader": true
+  },
+  "criticalDeps": [
+    "sharedcorelib",
+    "@noble/ed25519",
+    "@noble/hashes",
+    "@tauri-apps/plugin-stronghold",
+    "@tauri-apps/plugin-http"
+  ],
+  "feed": {
+    "requireHttps": true
+  },
+  "release": {
+    "publishOwner": "tokans",
+    "workflow": ".github/workflows/release.yml",
+    "requirePublishToken": true,
+    "forbidInCiSigningKeys": true
+  },
+  "failOn": "high"
+}

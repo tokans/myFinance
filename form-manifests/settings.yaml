@@ -1,0 +1,96 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  settings.yaml — Settings page                                              ║
+# ║  Source: src/pages/Settings.tsx + src/stores/settings.store.ts              ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_settings
+manifest_version: "1.0.0"
+description: Currency, financial-year start, date format, theme.
+
+forms:
+
+  settings_form:
+    title: Settings
+    description: Defaults applied across the app.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Internal
+    layout:
+      type: single-page
+    submit_label: Save
+    state:
+      persistence: tauri-fs        # bound to src/stores/settings.store.ts
+      auto_save: true              # original UI saves on every change, no submit button
+    on_submit:
+      type: local
+      handler_name: useSettingsStore.update
+
+    sections:
+
+      - id: general
+        title: General
+        description: Currency, financial year, date format.
+        fields:
+
+          - id: currency
+            type: select
+            label: Currency
+            required: true
+            default: INR
+            choices:
+              static:
+                - { value: INR, label: INR }
+                - { value: USD, label: USD }
+                - { value: EUR, label: EUR }
+                - { value: GBP, label: GBP }
+                - { value: SGD, label: SGD }
+                - { value: AED, label: AED }
+                - { value: AUD, label: AUD }
+                - { value: CAD, label: CAD }
+                - { value: JPY, label: JPY }
+
+          - id: fy_start_month
+            type: select
+            label: Financial year starts
+            required: true
+            default: 4
+            number_type: int
+            choices:
+              static:
+                - { value: 1, label: "January (calendar year)" }
+                - { value: 4, label: "April (India FY)" }
+
+          - id: date_format
+            type: select
+            label: Default date format
+            required: true
+            default: DD/MM/YYYY
+            hint: Used as the parsing hint default during Excel import.
+            choices:
+              static:
+                - { value: DD/MM/YYYY, label: "DD/MM/YYYY  —  31/03/2026" }
+                - { value: MM/DD/YYYY, label: "MM/DD/YYYY  —  03/31/2026" }
+                - { value: YYYY-MM-DD, label: "YYYY-MM-DD  —  2026-03-31" }
+
+          - id: theme
+            type: select
+            label: Theme
+            required: true
+            default: system
+            choices:
+              static:
+                - { value: system, label: System }
+                - { value: light,  label: Light }
+                - { value: dark,   label: Dark }
+
+      # Vault setup/unlock is its own sub-form — see vault.yaml.
+      # Settings page embeds it only when running inside Tauri.
+      - id: vault_section
+        title: Credential vault
+        condition: { ref: is_tauri }
+        fields:
+          - id: vault_embed
+            type: hidden
+            label: ""
+            source: computed
+            value: { form_ref: vault_unlock_form }

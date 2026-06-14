@@ -1,0 +1,107 @@
+{
+  "ITR": {
+    "ITR1": {
+      "CreationInfo": {
+        "SWVersionNo": "1.0",
+        "SWCreatedBy": "SW10000000",
+        "JSONCreatedBy": "SW10000000",
+        "JSONCreationDate": "2026-06-01",
+        "IntermediaryCity": "Bengaluru",
+        "Digest": "-"
+      },
+      "Form_ITR1": {
+        "FormName": "ITR1",
+        "Description": "For individuals being a resident having income from salaries, one house property, other sources and agricultural income up to Rs.5000",
+        "AssessmentYear": "2026",
+        "SchemaVer": "Ver1.0",
+        "FormVer": "Ver1.0"
+      },
+      "PersonalInfo": {
+        "AssesseeName": { "FirstName": "ARJUN", "SurNameOrOrgName": "VERMA" },
+        "PAN": "ABCDE1234F",
+        "Address": {
+          "ResidenceNo": "12",
+          "LocalityOrArea": "Indiranagar",
+          "CityOrTownOrDistrict": "Bengaluru",
+          "StateCode": "29",
+          "PinCode": 560038,
+          "CountryCode": "91"
+        },
+        "DOB": "1990-04-15",
+        "EmployerCategory": "OTH"
+      },
+      "FilingStatus": { "AY": "2026-27", "ReturnFileSec": 11, "NewTaxRegime": "Y" },
+      "ITR1_IncomeDeductions": {
+        "GrossSalary": 2150000,
+        "Salary": 2100000,
+        "IncomeFromSal": 2100000,
+        "TotalIncomeChargeableUnHP": -200000,
+        "IncomeOthSrc": 84000,
+        "GrossTotIncome": 1984000,
+        "ExemptIncAgriOthUs10": 120000,
+        "UsrDeductUndChapVIA": {
+          "Section80C": 150000,
+          "Section80CCD1B": 50000,
+          "Section80D": 28000,
+          "Section80TTA": 10000
+        },
+        "DeductUndChapVIA": {
+          "Section80C": 150000,
+          "Section80CCD1B": 50000,
+          "Section80D": 28000,
+          "Section80TTA": 10000,
+          "TotalChapVIADeductions": 238000
+        },
+        "TotalIncome": 1746000
+      },
+      "TDSonSalaries": {
+        "TDSonSalary": [
+          {
+            "EmployerOrDeductorOrCollectDetl": {
+              "TAN": "BLRA00123E",
+              "EmployerOrDeductorOrCollecterName": "Acme Software India Pvt Ltd"
+            },
+            "IncChrgSal": 2100000,
+            "TotalTDSSal": 295000
+          }
+        ]
+      },
+      "TaxPayments": {
+        "TaxPayment": [
+          {
+            "BSRCode": "0510308",
+            "DateDep": "2026-03-20",
+            "SerialNumber": 2451,
+            "Amt": 25000,
+            "MajorHead": "Self Assessment Tax"
+          }
+        ]
+      },
+      "ITR1_TaxComputation": {
+        "TotalTaxPayable": 312000,
+        "Rebate87A": 0,
+        "EducationCess": 12480,
+        "NetTaxLiability": 324480,
+        "GrossTaxLiability": 324480
+      },
+      "TaxPaid": {
+        "TaxesPaid": {
+          "TDS": 295000,
+          "AdvanceTax": 0,
+          "SelfAssessmentTax": 25000,
+          "TCS": 0,
+          "TotalTaxesPaid": 320000
+        },
+        "BalTaxPayable": 4480
+      },
+      "Verification": {
+        "Declaration": { "AssesseeVerName": "ARJUN VERMA", "FatherName": "—" },
+        "Capacity": "S",
+        "Place": "Bengaluru"
+      },
+      "ScheduleVDA": { "_note": "Virtual digital assets — intentionally unmapped by the importer" },
+      "ScheduleFA": { "_note": "Foreign assets — intentionally unmapped" },
+      "ScheduleAL": { "_note": "Assets & liabilities — intentionally unmapped" }
+    }
+  }
+}

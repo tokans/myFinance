@@ -1,0 +1,1874 @@
+[
+  {
+    "namespace": "myfinance",
+    "name": "Settings",
+    "dbAlias": "myfinance_settings",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "App preferences + small state (currency, FY start, residence, estate check-in, patron grants, device id).",
+    "fields": [
+      {
+        "name": "key",
+        "dataType": "string",
+        "keyField": true,
+        "description": "setting key"
+      },
+      {
+        "name": "value",
+        "dataType": "string",
+        "required": true,
+        "personalData": true,
+        "confidentiality": "Confidential",
+        "purpose": "App preferences include residence and estate check-in state.",
+        "description": "setting value (stringified)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "VaultEntries",
+    "dbAlias": "myfinance_vault_entries",
+    "schemaType": "Table",
+    "confidentiality": "Restricted",
+    "owner": "myfinance",
+    "purpose": "Friendly labels + Stronghold record pointers for stored credentials (ciphertext lives in the per-app Stronghold vault, never here).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "label",
+        "dataType": "string",
+        "required": true,
+        "description": "user-facing credential label"
+      },
+      {
+        "name": "stronghold_key",
+        "dataType": "string",
+        "required": true,
+        "index": "Unique",
+        "description": "Stronghold record key (pointer, not a secret)"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "Accounts",
+    "dbAlias": "myfinance_accounts",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Financial accounts the user tracks net worth across (banks, deposits, investments, loans).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "name",
+        "dataType": "string",
+        "required": true,
+        "description": "account label"
+      },
+      {
+        "name": "type",
+        "dataType": "enum",
+        "required": true,
+        "description": "account type",
+        "constraints": {
+          "enumValues": [
+            "bank_savings",
+            "checking",
+            "cash",
+            "fixed_deposit",
+            "recurring_deposit",
+            "ppf",
+            "epf",
+            "nps",
+            "stocks",
+            "mutual_funds",
+            "etf",
+            "bonds",
+            "pms_aif",
+            "gold",
+            "real_estate",
+            "crypto",
+            "loan",
+            "credit_card",
+            "insurance",
+            "tax_refund",
+            "other"
+          ]
+        }
+      },
+      {
+        "name": "institution",
+        "dataType": "string",
+        "description": "bank/AMC/issuer name"
+      },
+      {
+        "name": "currency",
+        "dataType": "string",
+        "description": "ISO currency code"
+      },
+      {
+        "name": "opening_balance",
+        "dataType": "number",
+        "description": "opening balance"
+      },
+      {
+        "name": "credential_id",
+        "dataType": "id",
+        "description": "FK → myfinance_vault_entries.id"
+      },
+      {
+        "name": "is_archived",
+        "dataType": "boolean",
+        "description": "archived flag"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "type_note",
+        "dataType": "string",
+        "description": "free-text note for 'other' type"
+      },
+      {
+        "name": "maturity_date",
+        "dataType": "date",
+        "description": "term-product maturity (YYYY-MM-DD)"
+      },
+      {
+        "name": "contact",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Emergency contact so family can act on this account.",
+        "description": "free-text emergency contact"
+      },
+      {
+        "name": "emergency_action",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "What family should do for this account in an emergency.",
+        "description": "free-text emergency action"
+      },
+      {
+        "name": "holding_mode",
+        "dataType": "string",
+        "description": "single / joint / either_or_survivor / former_or_survivor"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      },
+      {
+        "name": "sip_day",
+        "dataType": "number",
+        "description": "SIP debit day-of-month (mutual funds)"
+      },
+      {
+        "name": "sip_amount",
+        "dataType": "number",
+        "description": "SIP installment amount"
+      },
+      {
+        "name": "sip_last_done",
+        "dataType": "date",
+        "description": "last SIP occurrence marked done (YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "MonthlySnapshots",
+    "dbAlias": "myfinance_monthly_snapshot",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "One balance per (account, month) — the net-worth time series.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "account_id",
+        "dataType": "id",
+        "required": true,
+        "description": "FK → myfinance_accounts.id (ON DELETE CASCADE)"
+      },
+      {
+        "name": "month",
+        "dataType": "string",
+        "required": true,
+        "description": "YYYY-MM",
+        "constraints": {
+          "pattern": "^\\d{4}-\\d{2}$"
+        }
+      },
+      {
+        "name": "value",
+        "dataType": "number",
+        "required": true,
+        "description": "balance for that month"
+      },
+      {
+        "name": "note",
+        "dataType": "string",
+        "description": "optional note"
+      },
+      {
+        "name": "source",
+        "dataType": "enum",
+        "description": "manual | import",
+        "constraints": {
+          "enumValues": [
+            "manual",
+            "import"
+          ]
+        }
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "Goals",
+    "dbAlias": "myfinance_goals",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Savings goals with target amount/date and ETA projection.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "name",
+        "dataType": "string",
+        "required": true,
+        "description": "goal label"
+      },
+      {
+        "name": "target_amount",
+        "dataType": "number",
+        "required": true,
+        "description": "target corpus"
+      },
+      {
+        "name": "target_date",
+        "dataType": "date",
+        "description": "target date (optional)"
+      },
+      {
+        "name": "baseline_month",
+        "dataType": "string",
+        "description": "YYYY-MM the goal counts from"
+      },
+      {
+        "name": "account_filter",
+        "dataType": "string",
+        "description": "JSON list of account ids contributing"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "archived_at",
+        "dataType": "date",
+        "description": "soft-archive timestamp"
+      },
+      {
+        "name": "category",
+        "dataType": "string",
+        "description": "life-goal template category"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "TaxYears",
+    "dbAlias": "myfinance_tax_years",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "One row per assessment year: chosen ITR form and import metadata.",
+    "fields": [
+      {
+        "name": "ay",
+        "dataType": "string",
+        "keyField": true,
+        "description": "assessment year, e.g. 'AY2026-27'"
+      },
+      {
+        "name": "itr_form",
+        "dataType": "string",
+        "description": "'1'..'4' or null"
+      },
+      {
+        "name": "itr_form_source",
+        "dataType": "string",
+        "description": "manual | import | wizard"
+      },
+      {
+        "name": "imported_filename",
+        "dataType": "string",
+        "description": "source ITR JSON file name"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "free-text notes"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "TaxIncome",
+    "dbAlias": "myfinance_tax_income",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Income line items per assessment year (salary, house property, capital gains, …).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "ay",
+        "dataType": "string",
+        "required": true,
+        "description": "FK → myfinance_tax_years.ay"
+      },
+      {
+        "name": "head",
+        "dataType": "string",
+        "required": true,
+        "description": "income head"
+      },
+      {
+        "name": "label",
+        "dataType": "string",
+        "required": true,
+        "description": "line-item label"
+      },
+      {
+        "name": "amount",
+        "dataType": "number",
+        "required": true,
+        "personalData": true,
+        "purpose": "The user's income detail, kept to compute and review tax.",
+        "description": "amount"
+      },
+      {
+        "name": "source_path",
+        "dataType": "string",
+        "description": "JSON path when imported"
+      },
+      {
+        "name": "note",
+        "dataType": "string",
+        "description": "note"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "TaxDeductions",
+    "dbAlias": "myfinance_tax_deductions",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Deduction line items per assessment year (80C, 80D, …).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "ay",
+        "dataType": "string",
+        "required": true,
+        "description": "FK → myfinance_tax_years.ay"
+      },
+      {
+        "name": "section",
+        "dataType": "string",
+        "required": true,
+        "description": "deduction section"
+      },
+      {
+        "name": "label",
+        "dataType": "string",
+        "required": true,
+        "description": "line-item label"
+      },
+      {
+        "name": "amount",
+        "dataType": "number",
+        "required": true,
+        "personalData": true,
+        "purpose": "The user's deduction detail, kept to compute and review tax.",
+        "description": "amount"
+      },
+      {
+        "name": "source_path",
+        "dataType": "string",
+        "description": "JSON path when imported"
+      },
+      {
+        "name": "note",
+        "dataType": "string",
+        "description": "note"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "TaxPayments",
+    "dbAlias": "myfinance_tax_payments",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Tax payments per assessment year (TDS, advance, self-assessment).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "ay",
+        "dataType": "string",
+        "required": true,
+        "description": "FK → myfinance_tax_years.ay"
+      },
+      {
+        "name": "type",
+        "dataType": "string",
+        "required": true,
+        "description": "tds_salary | tds_other | advance | self_assessment | tcs"
+      },
+      {
+        "name": "payer_name",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Identify the deductor on a TDS entry.",
+        "description": "payer/deductor name"
+      },
+      {
+        "name": "amount",
+        "dataType": "number",
+        "required": true,
+        "personalData": true,
+        "purpose": "The user's tax-payment detail, kept to compute and review tax.",
+        "description": "amount"
+      },
+      {
+        "name": "source_path",
+        "dataType": "string",
+        "description": "JSON path when imported"
+      },
+      {
+        "name": "note",
+        "dataType": "string",
+        "description": "note"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "TaxAssessment",
+    "dbAlias": "myfinance_tax_assessment",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Computed assessment summary per assessment year.",
+    "fields": [
+      {
+        "name": "ay",
+        "dataType": "string",
+        "keyField": true,
+        "description": "FK → myfinance_tax_years.ay"
+      },
+      {
+        "name": "gross_total_income",
+        "dataType": "number",
+        "personalData": true,
+        "purpose": "The user's income summary, kept to compute and review tax.",
+        "description": "gross total income"
+      },
+      {
+        "name": "total_deductions",
+        "dataType": "number",
+        "description": "total deductions"
+      },
+      {
+        "name": "total_income",
+        "dataType": "number",
+        "description": "total income"
+      },
+      {
+        "name": "total_tax_payable",
+        "dataType": "number",
+        "description": "total tax payable"
+      },
+      {
+        "name": "rebate_87a",
+        "dataType": "number",
+        "description": "87A rebate"
+      },
+      {
+        "name": "education_cess",
+        "dataType": "number",
+        "description": "education cess"
+      },
+      {
+        "name": "net_tax_liability",
+        "dataType": "number",
+        "description": "net tax liability"
+      },
+      {
+        "name": "total_taxes_paid",
+        "dataType": "number",
+        "description": "total taxes paid"
+      },
+      {
+        "name": "refund_or_balance",
+        "dataType": "number",
+        "description": "refund (+) or balance due (−)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "TaxWizardAnswers",
+    "dbAlias": "myfinance_tax_wizard_answers",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Per-AY answers to the ITR recommendation wizard.",
+    "fields": [
+      {
+        "name": "ay",
+        "dataType": "string",
+        "keyField": true,
+        "description": "FK → myfinance_tax_years.ay"
+      },
+      {
+        "name": "answers",
+        "dataType": "string",
+        "required": true,
+        "description": "JSON blob of wizard answers"
+      },
+      {
+        "name": "recommended",
+        "dataType": "string",
+        "description": "recommended ITR form"
+      },
+      {
+        "name": "rationale",
+        "dataType": "string",
+        "description": "recommendation rationale"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "CustomOptions",
+    "dbAlias": "myfinance_custom_options",
+    "schemaType": "Table",
+    "confidentiality": "Internal",
+    "owner": "myfinance",
+    "purpose": "User-added 'Other' values for finite-set inputs (country/city/institution/…).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "category",
+        "dataType": "string",
+        "required": true,
+        "description": "master id"
+      },
+      {
+        "name": "value",
+        "dataType": "string",
+        "required": true,
+        "description": "canonical stored value"
+      },
+      {
+        "name": "label",
+        "dataType": "string",
+        "required": true,
+        "description": "display label"
+      },
+      {
+        "name": "parent",
+        "dataType": "string",
+        "description": "dependency key (e.g. city → country code)"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "People",
+    "dbAlias": "myfinance_people",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Finance/estate contact hub: nominees, executors, attorneys, claims contacts. Bridged (not duplicated) to the shared person spine via myfinance#PersonFacet + entities dual-write — the integer id is the app-local relational key the estate tables join on.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "name",
+        "dataType": "string",
+        "required": true,
+        "personalData": true,
+        "purpose": "Identify the contact for estate/emergency actions.",
+        "description": "person name"
+      },
+      {
+        "name": "relationship",
+        "dataType": "string",
+        "description": "relationship to the user"
+      },
+      {
+        "name": "phone",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Reach the contact in an emergency or estate claim.",
+        "description": "phone"
+      },
+      {
+        "name": "email",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Reach the contact in an emergency or estate claim.",
+        "description": "email"
+      },
+      {
+        "name": "id_proof_ref",
+        "dataType": "string",
+        "confidentiality": "Restricted",
+        "personalData": true,
+        "purpose": "Locate the person's identity proof for estate claims.",
+        "description": "id-proof reference"
+      },
+      {
+        "name": "access_tier",
+        "dataType": "number",
+        "description": "progressive-access tier (0/1/2)",
+        "constraints": {
+          "min": 0,
+          "max": 2
+        }
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Estate-readiness note about this person.",
+        "description": "free-text notes"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "Documents",
+    "dbAlias": "myfinance_documents",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Typed legal/financial document metadata (Will, PoA, policies, statements). Blobs live AES-GCM-sealed on disk, never here.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "type",
+        "dataType": "string",
+        "description": "document type (will/poa/policy/…)"
+      },
+      {
+        "name": "title",
+        "dataType": "string",
+        "required": true,
+        "personalData": true,
+        "purpose": "Identify the user's legal/financial document.",
+        "description": "document title"
+      },
+      {
+        "name": "file_name",
+        "dataType": "string",
+        "description": "sealed blob file name under documents/ (null = metadata-only)"
+      },
+      {
+        "name": "mime",
+        "dataType": "string",
+        "description": "MIME type"
+      },
+      {
+        "name": "size",
+        "dataType": "number",
+        "description": "blob size in bytes"
+      },
+      {
+        "name": "encrypted",
+        "dataType": "boolean",
+        "description": "1 when the on-disk blob is AES-GCM sealed"
+      },
+      {
+        "name": "account_id",
+        "dataType": "id",
+        "description": "FK → myfinance_accounts.id"
+      },
+      {
+        "name": "person_id",
+        "dataType": "id",
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "issued_on",
+        "dataType": "date",
+        "description": "issue date"
+      },
+      {
+        "name": "expires_on",
+        "dataType": "date",
+        "description": "expiry date"
+      },
+      {
+        "name": "location_of_original",
+        "dataType": "string",
+        "confidentiality": "Restricted",
+        "personalData": true,
+        "purpose": "Tell family where the physical original is kept.",
+        "description": "where the physical original lives"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "notes"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "Reminders",
+    "dbAlias": "myfinance_reminders",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Manual + derived reminders (FD maturity, document expiry, SIP due, reviews).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "type",
+        "dataType": "string",
+        "description": "category (fd_maturity/doc_expiry/custom/…)"
+      },
+      {
+        "name": "title",
+        "dataType": "string",
+        "required": true,
+        "description": "reminder title"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "notes"
+      },
+      {
+        "name": "due_date",
+        "dataType": "date",
+        "required": true,
+        "description": "due date (YYYY-MM-DD)"
+      },
+      {
+        "name": "cadence",
+        "dataType": "enum",
+        "description": "once | annual",
+        "constraints": {
+          "enumValues": [
+            "once",
+            "annual"
+          ]
+        }
+      },
+      {
+        "name": "source",
+        "dataType": "enum",
+        "description": "manual | derived",
+        "constraints": {
+          "enumValues": [
+            "manual",
+            "derived"
+          ]
+        }
+      },
+      {
+        "name": "dedupe_key",
+        "dataType": "string",
+        "index": "Unique",
+        "description": "stable identity for a derived reminder"
+      },
+      {
+        "name": "status",
+        "dataType": "enum",
+        "description": "open | done | dismissed",
+        "constraints": {
+          "enumValues": [
+            "open",
+            "done",
+            "dismissed"
+          ]
+        }
+      },
+      {
+        "name": "snoozed_until",
+        "dataType": "date",
+        "description": "hidden until this date"
+      },
+      {
+        "name": "last_fired_on",
+        "dataType": "date",
+        "description": "last OS-notification date"
+      },
+      {
+        "name": "account_id",
+        "dataType": "id",
+        "description": "FK → myfinance_accounts.id"
+      },
+      {
+        "name": "document_id",
+        "dataType": "id",
+        "description": "FK → myfinance_documents.id"
+      },
+      {
+        "name": "person_id",
+        "dataType": "id",
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "InsurancePolicies",
+    "dbAlias": "myfinance_insurance_policies",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Insurance policies for coverage-gap analysis and claims readiness.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "account_id",
+        "dataType": "id",
+        "description": "FK → myfinance_accounts.id"
+      },
+      {
+        "name": "kind",
+        "dataType": "enum",
+        "description": "policy kind",
+        "constraints": {
+          "enumValues": [
+            "term",
+            "health",
+            "accident",
+            "critical_illness",
+            "loan",
+            "endowment",
+            "ulip",
+            "motor",
+            "home",
+            "other"
+          ]
+        }
+      },
+      {
+        "name": "insurer",
+        "dataType": "string",
+        "required": true,
+        "description": "insurer name"
+      },
+      {
+        "name": "policy_no",
+        "dataType": "string",
+        "confidentiality": "Restricted",
+        "personalData": true,
+        "purpose": "Identify the policy in a claim.",
+        "description": "policy number"
+      },
+      {
+        "name": "sum_assured",
+        "dataType": "number",
+        "description": "sum assured"
+      },
+      {
+        "name": "premium",
+        "dataType": "number",
+        "description": "premium"
+      },
+      {
+        "name": "renewal_date",
+        "dataType": "date",
+        "description": "renewal date"
+      },
+      {
+        "name": "tpa",
+        "dataType": "string",
+        "description": "third-party administrator"
+      },
+      {
+        "name": "network_hospitals",
+        "dataType": "string",
+        "description": "network-hospital info"
+      },
+      {
+        "name": "claims_contact_person_id",
+        "dataType": "id",
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "notes"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "Holdings",
+    "dbAlias": "myfinance_holdings",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Account↔person links: nominees, co-holders, Will beneficiaries (+ share).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "account_id",
+        "dataType": "id",
+        "required": true,
+        "description": "FK → myfinance_accounts.id"
+      },
+      {
+        "name": "person_id",
+        "dataType": "id",
+        "required": true,
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "role",
+        "dataType": "enum",
+        "description": "nominee | co_holder | beneficiary",
+        "constraints": {
+          "enumValues": [
+            "nominee",
+            "co_holder",
+            "beneficiary"
+          ]
+        }
+      },
+      {
+        "name": "share_pct",
+        "dataType": "number",
+        "description": "nominee/beneficiary share %"
+      },
+      {
+        "name": "position",
+        "dataType": "number",
+        "description": "ordering position"
+      },
+      {
+        "name": "sec39_beneficial",
+        "dataType": "boolean",
+        "description": "Sec 39 beneficial-nominee flag"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "WillMeta",
+    "dbAlias": "myfinance_will_meta",
+    "schemaType": "Table",
+    "confidentiality": "Restricted",
+    "owner": "myfinance",
+    "purpose": "Single-row Will metadata (executor, registration, original's location).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "has_will",
+        "dataType": "boolean",
+        "description": "user has a Will"
+      },
+      {
+        "name": "executor_person_id",
+        "dataType": "id",
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "guardian_person_id",
+        "dataType": "id",
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "registered",
+        "dataType": "boolean",
+        "description": "Will registered"
+      },
+      {
+        "name": "registration_details",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Locate the registered Will for probate.",
+        "description": "registration details"
+      },
+      {
+        "name": "location_of_original",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Tell the executor where the Will original is kept.",
+        "description": "where the original is kept"
+      },
+      {
+        "name": "probate_required",
+        "dataType": "boolean",
+        "description": "probate required"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "notes"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "IncapacityMeta",
+    "dbAlias": "myfinance_incapacity_meta",
+    "schemaType": "Table",
+    "confidentiality": "Restricted",
+    "owner": "myfinance",
+    "purpose": "Single-row PoA + Advance Medical Directive metadata.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "poa_attorney_person_id",
+        "dataType": "id",
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "poa_kind",
+        "dataType": "string",
+        "description": "general | specific"
+      },
+      {
+        "name": "poa_scope",
+        "dataType": "string",
+        "description": "PoA scope"
+      },
+      {
+        "name": "poa_registered",
+        "dataType": "boolean",
+        "description": "PoA registered"
+      },
+      {
+        "name": "poa_revoked",
+        "dataType": "boolean",
+        "description": "PoA revoked"
+      },
+      {
+        "name": "amd_life_support",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "The user's advance medical directive on life support.",
+        "description": "AMD: life support"
+      },
+      {
+        "name": "amd_resuscitation",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "The user's advance medical directive on resuscitation.",
+        "description": "AMD: resuscitation"
+      },
+      {
+        "name": "amd_organ_donation",
+        "dataType": "boolean",
+        "description": "AMD: organ donation"
+      },
+      {
+        "name": "amd_attestation",
+        "dataType": "string",
+        "description": "AMD attestation details"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "notes"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "AccessGrants",
+    "dbAlias": "myfinance_access_grants",
+    "schemaType": "Table",
+    "confidentiality": "Restricted",
+    "owner": "myfinance",
+    "purpose": "Progressive-access grants per person (tier 0/1/2) for estate disclosure.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "person_id",
+        "dataType": "id",
+        "required": true,
+        "description": "FK → myfinance_people.id"
+      },
+      {
+        "name": "tier",
+        "dataType": "number",
+        "description": "granted tier (0/1/2)",
+        "constraints": {
+          "min": 0,
+          "max": 2
+        }
+      },
+      {
+        "name": "scope",
+        "dataType": "string",
+        "description": "optional scope note"
+      },
+      {
+        "name": "trigger",
+        "dataType": "string",
+        "description": "manual | staleness"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "AuditLog",
+    "dbAlias": "myfinance_audit_log",
+    "schemaType": "Table",
+    "confidentiality": "Internal",
+    "owner": "myfinance",
+    "purpose": "Append-only local audit of estate-access actions (check-ins, exports).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "at",
+        "dataType": "date",
+        "description": "timestamp"
+      },
+      {
+        "name": "action",
+        "dataType": "string",
+        "required": true,
+        "description": "action key"
+      },
+      {
+        "name": "detail",
+        "dataType": "string",
+        "description": "detail"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "LifeEvents",
+    "dbAlias": "myfinance_life_events",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Life events (marriage, child, move) driving tailored review checklists.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "type",
+        "dataType": "string",
+        "required": true,
+        "personalData": true,
+        "purpose": "Tailor estate-review checklists to the user's life events.",
+        "description": "event type"
+      },
+      {
+        "name": "event_date",
+        "dataType": "date",
+        "description": "event date"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "notes"
+      },
+      {
+        "name": "created_at",
+        "dataType": "date",
+        "description": "creation timestamp"
+      },
+      {
+        "name": "sync_id",
+        "dataType": "id",
+        "index": "Unique",
+        "description": "stable cross-device identity for LAN sync (0021)"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "AppLaunches",
+    "dbAlias": "myfinance_app_launches",
+    "schemaType": "Table",
+    "confidentiality": "Internal",
+    "owner": "myfinance",
+    "purpose": "Local-only usage telemetry: one row per app launch (drives on-device engagement tiers; never transmitted).",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "launched_at",
+        "dataType": "date",
+        "description": "UTC launch timestamp"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "MasterOptions",
+    "dbAlias": "myfinance_master_options",
+    "schemaType": "Table",
+    "confidentiality": "Public",
+    "owner": "myfinance",
+    "purpose": "OTA-pushed reference data (countries, cities, institutions, …) — public master rows.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "master_id",
+        "dataType": "string",
+        "required": true,
+        "description": "master id"
+      },
+      {
+        "name": "value",
+        "dataType": "string",
+        "required": true,
+        "description": "canonical stored value"
+      },
+      {
+        "name": "label",
+        "dataType": "string",
+        "required": true,
+        "description": "display label"
+      },
+      {
+        "name": "icon",
+        "dataType": "string",
+        "description": "optional leading glyph"
+      },
+      {
+        "name": "parent",
+        "dataType": "string",
+        "description": "dependency key"
+      },
+      {
+        "name": "version",
+        "dataType": "number",
+        "description": "manifest revision applied from"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "Partners",
+    "dbAlias": "myfinance_partners",
+    "schemaType": "Table",
+    "confidentiality": "Internal",
+    "owner": "myfinance",
+    "purpose": "Curated professional directory (doctors/lawyers/CAs) pushed OTA; contact fields auto-fill the person form.",
+    "fields": [
+      {
+        "name": "id",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Generated",
+        "description": "integer rowid key (preserved from the legacy DB)"
+      },
+      {
+        "name": "professional_type",
+        "dataType": "string",
+        "required": true,
+        "description": "professional type (matches the master)"
+      },
+      {
+        "name": "name",
+        "dataType": "string",
+        "required": true,
+        "personalData": true,
+        "purpose": "Show the professional's name in the directory.",
+        "description": "person or firm name"
+      },
+      {
+        "name": "phone",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Contact the professional.",
+        "description": "phone"
+      },
+      {
+        "name": "email",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Contact the professional.",
+        "description": "email"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "description": "speciality/location blurb"
+      },
+      {
+        "name": "icon",
+        "dataType": "string",
+        "description": "optional leading glyph"
+      },
+      {
+        "name": "version",
+        "dataType": "number",
+        "description": "manifest revision applied from"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "SyncTombstones",
+    "dbAlias": "myfinance_sync_tombstones",
+    "schemaType": "Table",
+    "confidentiality": "Internal",
+    "owner": "myfinance",
+    "purpose": "Deletion log for LAN sync — lets a delete on one device propagate instead of resurrecting.",
+    "fields": [
+      {
+        "name": "table_name",
+        "dataType": "string",
+        "keyField": true,
+        "description": "namespaced table the row was deleted from"
+      },
+      {
+        "name": "key",
+        "dataType": "string",
+        "keyField": true,
+        "description": "sync identity of the deleted row"
+      },
+      {
+        "name": "deleted_at",
+        "dataType": "date",
+        "description": "deletion timestamp"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "MigrationLedger",
+    "dbAlias": "myfinance_migration_ledger",
+    "schemaType": "Table",
+    "confidentiality": "Internal",
+    "owner": "myfinance",
+    "purpose": "Ledger of the one-time legacy myfinance.db → suite.db consolidation (decisions 6/24): per-table copy/verify evidence rows plus the final 'migration' done marker. Append-only audit trail making the migration idempotent, resumable, and auditable.",
+    "fields": [
+      {
+        "name": "entry_id",
+        "dataType": "id",
+        "keyField": true,
+        "description": "'table:<legacy name>' or 'migration'"
+      },
+      {
+        "name": "table_name",
+        "dataType": "string",
+        "description": "legacy table copied (null for the completion marker)"
+      },
+      {
+        "name": "legacy_rows",
+        "dataType": "number",
+        "description": "rows in the legacy table"
+      },
+      {
+        "name": "copied_rows",
+        "dataType": "number",
+        "description": "rows copied into the suite table"
+      },
+      {
+        "name": "checksum",
+        "dataType": "string",
+        "description": "FNV-1a hash of the ordered row sample (legacy side, verified equal on the suite side)"
+      },
+      {
+        "name": "status",
+        "dataType": "string",
+        "required": true,
+        "description": "done | no-legacy"
+      },
+      {
+        "name": "detail",
+        "dataType": "string",
+        "description": "free-text detail"
+      },
+      {
+        "name": "completed_at",
+        "dataType": "date",
+        "required": true,
+        "description": "ISO timestamp"
+      }
+    ]
+  },
+  {
+    "namespace": "myfinance",
+    "name": "HealthProfile",
+    "dbAlias": "common_ice_card",
+    "schemaType": "Table",
+    "confidentiality": "Restricted",
+    "owner": "myfinance",
+    "purpose": "Hospitalisation-ready medical facts for the ICE card — stored ONCE suite-wide on the common ICE card.",
+    "fields": [
+      {
+        "name": "person_key",
+        "dataType": "id",
+        "keyField": true,
+        "description": "'self' for the user's own card"
+      },
+      {
+        "name": "display_name",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Name shown on the emergency card.",
+        "description": "maps the legacy full_name"
+      },
+      {
+        "name": "blood_group",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Critical for emergency transfusion decisions.",
+        "description": "blood group"
+      },
+      {
+        "name": "allergies",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Allergies first responders must know.",
+        "description": "allergies"
+      },
+      {
+        "name": "conditions",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Conditions first responders must know.",
+        "description": "maps the legacy chronic_conditions"
+      },
+      {
+        "name": "medications",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Current medications first responders must know.",
+        "description": "medications"
+      },
+      {
+        "name": "organ_donor",
+        "dataType": "boolean",
+        "description": "registered organ donor"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "personalData": true,
+        "purpose": "Any other emergency note.",
+        "description": "notes"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "last-write timestamp (LWW sync clock)"
+      }
+    ],
+    "adopts": "common#IceCard"
+  },
+  {
+    "namespace": "myfinance",
+    "name": "PersonFacet",
+    "plural": "PersonFacets",
+    "dbAlias": "myfinance_person_facet",
+    "schemaType": "Table",
+    "confidentiality": "Confidential",
+    "owner": "myfinance",
+    "purpose": "Finance-specific facet data attached to a shared person (estate access tier, id-proof, notes).",
+    "fields": [
+      {
+        "name": "person_key",
+        "dataType": "id",
+        "keyField": true,
+        "editability": "Immutable",
+        "description": "shared person_key this facet attaches to"
+      },
+      {
+        "name": "access_tier",
+        "dataType": "number",
+        "description": "estate progressive-access tier (0/1/2)"
+      },
+      {
+        "name": "id_proof_ref",
+        "dataType": "string",
+        "confidentiality": "Restricted",
+        "personalData": true,
+        "purpose": "Locate the person's identity proof for estate claims.",
+        "description": "id-proof reference (optional)"
+      },
+      {
+        "name": "notes",
+        "dataType": "string",
+        "confidentiality": "Confidential",
+        "personalData": true,
+        "purpose": "Finance-side note about this person for estate readiness.",
+        "description": "free-text notes (optional)"
+      },
+      {
+        "name": "local_person_id",
+        "dataType": "number",
+        "description": "back-reference to the app-local myfinance_people.id for migration/reconciliation"
+      },
+      {
+        "name": "updated_at",
+        "dataType": "date",
+        "description": "ISO timestamp of the last edit"
+      },
+      {
+        "name": "source_app",
+        "dataType": "string",
+        "description": "app id that last wrote this row"
+      }
+    ]
+  }
+]

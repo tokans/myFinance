@@ -1,0 +1,173 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  goals.yaml — Goal CRUD form + life-goal template picker                    ║
+# ║  Source: src/pages/Goals.tsx (GoalForm + GoalRow + list)                    ║
+# ║          src/domain/fire.ts LIFE_GOAL_CATEGORIES                            ║
+# ║                                                                              ║
+# ║  Image asset (generate once and ship in public/img/):                       ║
+# ║    public/img/life-goals.png  —  4 cols × 3 rows, each tile 256×256 px      ║
+# ║    See assets/life-goals.prompt.txt for the Nano Banana prompt.             ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_goals
+manifest_version: "1.0.0"
+description: Savings targets with ETA projection, plus life-goal templates.
+
+# ── Sprite definition (referenced by life_goal_templates picker) ─────────────
+assets:
+  life_goals_sprite:
+    src: /img/life-goals.png
+    grid: { cols: 4, rows: 3, tile_size: 256, gutter: 0 }
+
+forms:
+
+  goal_form:
+    title: Goal
+    description: Set a target amount and optional deadline.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Internal
+    layout:
+      type: single-page
+    submit_label: Save
+    draft_label: Cancel
+    on_submit:
+      type: local
+      handler_name: db.goals.create_or_update
+      success_message: Goal saved.
+
+    sections:
+
+      - id: goal_fields
+        fields:
+
+          - id: name
+            type: text
+            label: Name
+            required: true
+            placeholder: "e.g. Emergency fund"
+            width: half
+            validation:
+              min_length: 1
+              min_length_message: Required
+              max_length: 64
+
+          - id: target_amount
+            type: number
+            label: Target amount
+            required: true
+            number_type: decimal2
+            default: 100000
+            width: half
+            prefix: { context: currency }
+            validation:
+              min: 0.01
+              min_message: Must be > 0
+
+          - id: target_date
+            type: date
+            label: Target date
+            hint: optional
+            width: half
+
+          - id: baseline_month
+            type: text
+            label: Baseline month
+            hint: "optional · YYYY-MM"
+            placeholder: YYYY-MM
+            widget: month-picker
+            width: half
+            validation:
+              pattern: "^(\\d{4}-(0[1-9]|1[0-2]))?$"
+              pattern_message: "YYYY-MM"
+
+  # ── Life-goal template picker ───────────────────────────────────────────────
+  # Visual gallery of common life goals. Selecting a tile pre-fills the
+  # goal_form with the template's name and a sensible default target amount.
+  # Each option references a slice of life_goals_sprite.
+  life_goal_templates:
+    title: Pick a life goal to start with
+    description: >
+      Tap a tile to pre-fill a new goal. You can edit everything before saving.
+    version: "1.0.0"
+    form_state: active
+    layout:
+      type: single-page
+    submit_button: { hidden: true }   # tile click is the action
+    sections:
+
+      - id: templates
+        fields:
+
+          - id: template
+            type: select
+            label: Life goals
+            display_as: image-grid
+            grid: { cols: 4, rows: 3 }
+            sprite: { ref: life_goals_sprite }
+            on_change:
+              # Open the goal_form pre-filled with the chosen template.
+              type: local
+              handler_name: openGoalFormFromTemplate
+              payload:
+                name:           { expression: "$choice.label" }
+                target_amount:  { expression: "$choice.default_target" }
+                category:       { expression: "$choice.value" }
+            choices:
+              # sprite_index is row-major: 0..3 = row 1, 4..7 = row 2, 8..11 = row 3.
+              # The "others" tile is special — repeatable, and prompts the user
+              # for a custom description before opening the goal form.
+              static:
+                - { value: higher_studies,     label: "Higher Studies",            sprite_index: 0,  default_target: 2500000,  hint: "Masters / professional degree" }
+                - { value: grand_marriage,     label: "Grand Marriage + Honeymoon", sprite_index: 1,  default_target: 3000000,  hint: "Wedding + post-wedding trip" }
+                - { value: annual_vacation,    label: "Annual Vacation Abroad",    sprite_index: 2,  default_target: 1500000,  hint: "Multi-year overseas-trip corpus" }
+                - { value: luxury_car,         label: "Buy Luxury Car",            sprite_index: 3,  default_target: 4000000,  hint: "Down-payment + on-road cost" }
+                - { value: start_business,     label: "Start Business",            sprite_index: 4,  default_target: 5000000,  hint: "Seed capital + 12-month runway" }
+                - { value: kids_education,     label: "Kids College Education",    sprite_index: 5,  default_target: 5000000,  hint: "Undergrad fund per child" }
+                - { value: parents_medical,    label: "Parents Medical Needs",     sprite_index: 6,  default_target: 2000000,  hint: "Healthcare + caregiving buffer" }
+                - { value: build_legacy,       label: "Build Legacy",              sprite_index: 7,  default_target: 10000000, hint: "Long-term endowment / inheritance" }
+                - { value: migrate_abroad,     label: "Migrate Abroad",            sprite_index: 8,  default_target: 3000000,  hint: "Visa + relocation + settling-in" }
+                - { value: healthy_retirement, label: "Healthy Retirement",        sprite_index: 9,  default_target: 20000000, hint: "Retirement corpus (top-up)" }
+                - { value: philanthropy,       label: "Philanthropy",              sprite_index: 10, default_target: 1000000,  hint: "Annual giving corpus" }
+                - value: others
+                  label: "Others"
+                  sprite_index: 11
+                  default_target: null
+                  hint: "Add a custom goal — repeatable"
+                  behavior:
+                    repeatable: true                # tile can be picked many times
+                    prompt_for_name: true           # ask the user for a description first
+                    prompt_field:
+                      id: custom_name
+                      type: text
+                      label: Describe your goal
+                      placeholder: "e.g. Sabbatical year, music studio, …"
+                      required: true
+                      validation: { min_length: 1, max_length: 64 }
+
+  goals_list:
+    title: Goals
+    description: Set targets, track progress, see ETA.
+    version: "1.0.0"
+    form_state: active
+    layout:
+      type: single-page
+    submit_button: { hidden: true }
+    sections:
+
+      # Show the template gallery above the list (empty state especially).
+      - id: templates_intro
+        title: Start from a life-goal template
+        description: Or skip and add a custom goal below.
+        fields:
+          - id: template_picker_embed
+            type: hidden
+            source: computed
+            value: { form_ref: life_goal_templates }
+
+      - id: list_controls
+        fields:
+          - id: show_archived
+            type: boolean
+            label: Show archived
+            display_as: switch
+            default: false

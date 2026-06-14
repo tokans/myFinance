@@ -1,0 +1,117 @@
+Nano Banana (Gemini 2.5 Flash Image) prompt — account-type icon sheet
+=====================================================================
+
+Use the prompt below to generate ONE composite PNG, then drop it at
+  public/img/account-types.png
+The add/edit-account picker (src/components/accounts/AccountForm.tsx) slices it
+via the grid declared in src/lib/accountTypes.ts
+(SPRITE_COLS = 4, SPRITE_ROWS = 5, 256 px tiles, gutter = 0). Until the file is
+present the picker renders inline lucide icons with labels — no crash.
+
+Target output: 1024 × 1280 PNG, sRGB, no transparency.
+
+────────────────────────────────────────────────────────────────────
+PROMPT (copy from here ↓)
+────────────────────────────────────────────────────────────────────
+
+Generate a single 1024 × 1280 image arranged as a 4-column × 5-row
+grid of twenty financial-account icons (each cell exactly 256 × 256 px,
+no gutters between cells). The image must read as ONE composite sheet
+that can be sliced into twenty tiles along the cell boundaries. All
+twenty cells hold an icon.
+
+Global style for every cell:
+- Modern flat illustration, slightly rounded geometry, no harsh
+  outlines, no photorealism, no 3D
+- Calm, premium, hopeful fintech aesthetic (soft minimal)
+- Each illustration sits fully INSIDE its 256×256 cell with ~20%
+  margin and never crosses into a neighbor
+- No text, no numbers, no letters, no currency symbols, no logos,
+  no signatures, no watermarks
+- Uniform warm-cream background across ALL cells (#F8F4EC) so the
+  grid reads as one canvas, not twenty panels
+- Limited shared palette — each icon uses two of these colors plus
+  at most one accent:
+    terracotta #C97B5F · sage #7E9B82 · deep navy #2C3E5D ·
+    warm gold #E0B96A · soft rose #D49AA0
+- Same visual weight, stroke thickness, and corner-radius language
+  across all icons — none should dominate
+
+Twenty cells, row-major order (left → right, top → bottom):
+
+Row 1
+  1. Bank Savings — a classic bank building with columns and a
+     small piggy-bank silhouette tucked in the lower corner
+  2. Checking Account — an open billfold/wallet with a slim
+     debit-style card peeking out of the top
+  3. Cash / Wallet — a small fanned stack of banknotes with one
+     rounded coin resting in front
+  4. Fixed Deposit — a closed padlock sitting on a single
+     banknote, suggesting locked-away money for a fixed term
+
+Row 2
+  5. Recurring Deposit — a calendar page with a small circular
+     repeat/refresh arrow and a tiny coin, suggesting monthly saving
+  6. PPF (Public Provident Fund) — a sturdy shield with a small
+     sprouting plant/leaf at its centre (long-term safe growth)
+  7. EPF / Provident Fund — a briefcase with a small upward leaf
+     or coin above it (employment savings)
+  8. NPS (National Pension System) — an open umbrella sheltering
+     a single coin beneath it (retirement protection)
+
+Row 3
+  9. Stocks — a rising candlestick/bar chart with an upward arrow
+     above the tallest bar
+  10. Mutual Funds — a pie chart split into a few segments with a
+      small upward arrow accent beside it
+  11. ETF — three slightly fanned, stacked layered cards/baskets
+      suggesting a bundle of holdings
+  12. Bonds — a rolled certificate/scroll tied with a ribbon, a
+      small seal dot at the lower corner
+
+Row 4
+  13. PMS / AIF — a briefcase displaying a small rising line-chart
+      on its front face with a tiny star/sparkle accent in the
+      upper corner (professionally managed premium portfolio)
+  14. Gold / Precious Metals — two stacked rounded gold bars with
+      a soft shine glint
+  15. Real Estate / Property — a simple house with a pitched roof
+      and a small key beside it
+  16. Crypto — a faceted hexagonal coin/token with a subtle
+      circuit-node accent (generic digital asset, NO letters)
+
+Row 5
+  17. Loan — an open hand cupped beneath a single descending coin
+      (borrowed money / liability)
+  18. Credit Card — a single rounded payment card in three-quarter
+      view with a small chip rectangle (no numbers, no text)
+  19. Insurance — a shield with a soft heart at its centre
+      (protection / cover)
+  20. Others — a plain rounded card outlined with a dashed border
+      and a large centered "+" symbol inside (placeholder tile).
+      NO words/letters — only the +.
+
+Grid rules (critical):
+- Exactly 4 columns × 5 rows; each cell exactly 256 × 256 px
+- Cell boundaries are perfectly straight and pixel-aligned, so the
+  sheet can be sliced programmatically with no overlap
+- No drop shadows that cross cell borders
+- All twenty icons render at the same scale and weight
+- Final output: 1024 × 1280, PNG, no watermark, no text anywhere
+
+────────────────────────────────────────────────────────────────────
+PROMPT END ↑
+────────────────────────────────────────────────────────────────────
+
+QA checklist after generation:
+[ ] Image is exactly 1024 × 1280
+[ ] Slicing into 20 × (256 × 256) cells yields one clean icon per cell
+[ ] No text/letters/numbers/currency symbols anywhere
+[ ] All cells share the same background color
+[ ] All twenty icons feel visually consistent (same weight, palette)
+[ ] Icons are readable at ~96 px (sanity-check by downscaling)
+
+If any cell drifts (extra text, wrong subject, bleeding shadows),
+re-run with the offending tile called out as a correction, e.g.:
+  "Keep all other tiles identical. Replace cell (row 3, col 2) so
+   that the pie chart has exactly four segments and no arrow."

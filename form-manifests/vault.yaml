@@ -1,0 +1,168 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  vault.yaml — Credential vault (Stronghold)                                 ║
+# ║  Source: src/components/vault/UnlockPanel.tsx                               ║
+# ║          src/components/vault/CredentialPanel.tsx                           ║
+# ║          src/vault/stronghold.ts + src/stores/vault.store.ts                ║
+# ║                                                                              ║
+# ║  Two-form module:                                                            ║
+# ║    1. vault_unlock_form — sets up new vault OR unlocks existing one          ║
+# ║       Branching: first-time setup needs confirm-password; reopen does not.   ║
+# ║    2. credential_form  — per-account credential (label, user, pass, notes)   ║
+# ║       Gated by vault_unlocked.                                               ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_vault
+manifest_version: "1.0.0"
+description: Master-password vault and stored credentials.
+
+conditions:
+
+  vault_first_time:
+    description: No Stronghold snapshot exists yet
+    condition: { field: $context.has_master_password, op: is_false }
+
+  vault_exists:
+    description: Stronghold snapshot exists on disk
+    condition: { field: $context.has_master_password, op: is_true }
+
+  vault_unlocked:
+    description: Current session has the vault decrypted
+    condition: { field: $context.vault_unlocked, op: is_true }
+
+forms:
+
+  # ── Set up master password OR unlock existing vault ─────────────────────────
+  vault_unlock_form:
+    title: Credential vault
+    description: >
+      Your master password encrypts the on-disk vault snapshot. It is never
+      stored anywhere — if you forget it, the stored credentials are
+      unrecoverable.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Secret
+    layout:
+      type: single-page
+    submit_label:
+      # ButtonType.SUBMIT label flips on the branch
+      computed: "fields.$mode == 'setup' ? 'Create vault' : 'Unlock'"
+    on_submit:
+      type: local
+      handler_name: vault.store.unlock         # useVaultStore.unlockVault
+      success_message: Vault unlocked.
+      error_message: Wrong password or vault corrupted.
+
+    sections:
+
+      - id: unlock
+        # Different title depending on whether vault already exists
+        title:
+          computed: "fields.$mode == 'setup' ? 'Set up credential vault' : 'Unlock credential vault'"
+        description:
+          computed: >
+            fields.$mode == 'setup'
+              ? "Choose a master password. It encrypts the vault and is never stored anywhere. If you forget it, the stored credentials are unrecoverable."
+              : "Your master password is needed once per session."
+        fields:
+
+          # Hidden marker field so other field/section labels can branch on it.
+          - id: $mode
+            type: hidden
+            label: ""
+            source: computed
+            value:
+              expression: "$context.has_master_password ? 'unlock' : 'setup'"
+
+          - id: master_password
+            type: text
+            label: Master password
+            required: true
+            confidentiality: Secret
+            placeholder: "••••••••"
+            autocomplete:
+              computed: "fields.$mode == 'setup' ? 'new-password' : 'current-password'"
+            widget: password-input
+            width: full
+            validation:
+              # Setup needs >= 8 chars; unlock only needs non-empty.
+              min_length:
+                computed: "fields.$mode == 'setup' ? 8 : 1"
+              min_length_message:
+                computed: "fields.$mode == 'setup' ? 'Use at least 8 characters.' : 'Enter your master password.'"
+
+          - id: master_password_confirm
+            type: text
+            label: Confirm master password
+            confidentiality: Secret
+            placeholder: "••••••••"
+            autocomplete: new-password
+            widget: password-input
+            width: full
+            # Only shown during first-time setup
+            condition: { ref: vault_first_time }
+            required_if: { ref: vault_first_time }
+            validation:
+              # Must equal master_password (expression-based)
+              expression: "fields.master_password_confirm == fields.master_password"
+              expression_message: "Passwords don't match."
+
+  # ── Per-account credential (label/user/pass/notes) ─────────────────────────
+  credential_form:
+    title: Stored credential
+    description: >
+      Saved to an encrypted file in your app data folder. Forgetting the
+      master password makes it unrecoverable.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Secret
+    # Disable the entire form unless the vault is unlocked.
+    state:
+      disabled_unless: { ref: vault_unlocked }
+    layout:
+      type: single-page
+    submit_label: Save
+    draft_label: Cancel
+    on_submit:
+      type: local
+      handler_name: vault.putCredential
+
+    sections:
+
+      - id: credential
+        fields:
+
+          - id: label
+            type: text
+            label: Label
+            required: true
+            placeholder: "e.g. HDFC Savings"
+            default: { context: account_name }
+
+          - id: username
+            type: text
+            label: Username / account id
+            autocomplete: username
+
+          - id: password
+            type: text
+            label: Password
+            required: true
+            confidentiality: Secret
+            widget: password-input
+            autocomplete: current-password
+
+          - id: notes
+            type: multiline
+            label: Notes
+            hint: optional
+            rows: 2
+            validation:
+              max_length: 500
+
+          # Foreign key into the accounts table — set by host context.
+          - id: account_id
+            type: hidden
+            label: ""
+            source: context
+            value: account_id
+            editability: IMMUTABLE

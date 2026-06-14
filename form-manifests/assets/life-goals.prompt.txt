@@ -1,0 +1,95 @@
+Nano Banana (Gemini 2.5 Flash Image) prompt — life-goal tile sheet
+==================================================================
+
+Use the prompt below to generate ONE composite PNG, then drop it at
+  public/img/life-goals.png
+The form-engine renderer slices it via the grid declared in goals.yaml
+(assets.life_goals_sprite: cols=4, rows=3, tile=256, gutter=0).
+
+Target output: 1024 × 768 PNG, sRGB, no transparency.
+
+────────────────────────────────────────────────────────────────────
+PROMPT (copy from here ↓)
+────────────────────────────────────────────────────────────────────
+
+Generate a single 1024 × 768 image arranged as a 4-column × 3-row
+grid of twelve life-goal icons (each cell exactly 256 × 256 px, no
+gutters between cells). The image should read as ONE composite sheet
+that can be sliced into twelve tiles along the cell boundaries.
+
+Global style for every cell:
+- Modern flat illustration, slightly rounded geometry, no harsh
+  outlines, no photorealism, no 3D
+- Calm, premium, hopeful fintech aesthetic (think soft minimal)
+- Each illustration sits fully INSIDE its 256×256 cell with ~20%
+  margin and never crosses into a neighbor
+- No text, no numbers, no letters, no logos, no signatures,
+  no watermarks
+- Uniform warm-cream background across ALL cells (#F8F4EC) so the
+  grid reads as one canvas, not twelve panels
+- Limited shared palette — each icon uses two of these colors plus
+  at most one accent:
+    terracotta #C97B5F · sage #7E9B82 · deep navy #2C3E5D ·
+    warm gold #E0B96A · soft rose #D49AA0
+- Same visual weight, stroke thickness, and corner-radius language
+  across all twelve icons — none should dominate
+
+Twelve cells, row-major order (left → right, top → bottom):
+
+Row 1
+  1. Higher Studies — a graduation cap resting on a stack of two
+     books with a rolled diploma/scroll tied with a ribbon beside
+  2. Grand Marriage + Honeymoon — two interlocked wedding rings
+     with a small floral garland draped across, a tiny airplane
+     silhouette arcing in the upper corner (honeymoon hint)
+  3. Annual Vacation Abroad — a beach umbrella over a lounge
+     chair with a small airplane arcing above and a stamped
+     passport corner peeking in
+  4. Buy Luxury Car — a sleek modern coupé in side profile with
+     subtle motion lines, a small sparkle/shine glint on the body
+
+Row 2
+  5. Start Business — a small storefront awning with a rising
+     arrow chart climbing above the roofline
+  6. Kids College Education — a small child silhouette wearing
+     an oversized graduation cap, holding a book under one arm
+  7. Parents Medical Needs — a stethoscope curled around a soft
+     heart with a slim walking-cane silhouette tucked behind
+  8. Build Legacy — a tall oak tree with visible roots fanning
+     out, a half-circle sun behind the canopy
+
+Row 3
+  9. Migrate Abroad — a globe with a pin and a small suitcase,
+     a directional arrow curving from one continent to another
+  10. Healthy Retirement — a beach/lounge chair under a half-sun
+      with a yoga-lotus pose silhouette as a small accent
+  11. Philanthropy — an open hand offering a heart with three
+      small concentric ripple arcs rising upward
+  12. Others — a plain rounded card outlined with a dashed
+      border, a large centered "+" symbol inside (placeholder
+      "add your own" tile). NO words/letters — only the +.
+
+Grid rules (critical):
+- Exactly 4 columns × 3 rows; each cell exactly 256 × 256 px
+- Cell boundaries are perfectly straight and pixel-aligned, so
+  the sheet can be sliced programmatically with no overlap
+- No drop shadows that cross cell borders
+- All twelve icons render at the same scale and weight
+- Final output: 1024 × 768, PNG, no watermark, no text anywhere
+
+────────────────────────────────────────────────────────────────────
+PROMPT END ↑
+────────────────────────────────────────────────────────────────────
+
+QA checklist after generation:
+[ ] Image is exactly 1024 × 768
+[ ] Slicing into 12 × (256 × 256) cells yields one clean icon per cell
+[ ] No text/letters/numbers anywhere
+[ ] All cells share the same background color
+[ ] All twelve icons feel visually consistent (same weight, palette)
+[ ] Icons are readable at ~96 px (sanity-check by downscaling)
+
+If any cell drifts (extra text, wrong subject, bleeding shadows),
+re-run with the offending tile called out as a correction, e.g.:
+  "Keep all other tiles identical. Replace cell (row 2, col 1) so
+   that the hands cradle a heart with no walking-cane behind."

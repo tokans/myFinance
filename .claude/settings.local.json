@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /c/workspace/myFinance/ 2>&1; echo '---MEMORY---'; ls -la /c/Users/anshu/.claude/projects/C--workspace-myFinance/memory/ 2>&1)",
+      "Bash(winget install *)",
+      "Bash(npx @tauri-apps/cli icon icons/source.svg)",
+      "Bash(grep -E \"myfinance|\\\\.exe$\")",
+      "Bash(npx tsx *)",
+      "WebFetch(domain:www.incometax.gov.in)",
+      "Bash(curl -sSL --max-time 30 \"https://www.incometax.gov.in/iec/foportal/sites/default/files/2026-05/ITR-1_2026_Main_V1.0_0.json\" -o /c/workspace/myFinance/src/tax/schemas/ITR-1_AY26-27.json)",
+      "Bash(curl -sSL --max-time 30 \"https://www.incometax.gov.in/iec/foportal/sites/default/files/2026-05/ITR-2_2026_Main_V1.0.json\" -o /c/workspace/myFinance/src/tax/schemas/ITR-2_AY26-27.json)",
+      "Bash(curl -sSL --max-time 30 \"https://www.incometax.gov.in/iec/foportal/sites/default/files/2026-05/ITR-4_2026_Main_V1.0_0.json\" -o /c/workspace/myFinance/src/tax/schemas/ITR-4_AY26-27.json)",
+      "Bash(node -e ' *)",
+      "Bash(node scripts/inspect-schema.mjs src/tax/schemas/ITR-1_AY26-27.json)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(dotnet --version)",
+      "Bash(dotnet --list-sdks)",
+      "Bash(where dotnet *)",
+      "Read(//c/Program Files/dotnet/**)",
+      "Bash(where winget *)",
+      "Bash(\"/c/Program Files/dotnet/dotnet.exe\" --list-runtimes)",
+      "PowerShell($ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile \"$env:TEMP\\\\dotnet-install.ps1\"; Write-Output \"downloaded\"; Test-Path \"$env:TEMP\\\\dotnet-install.ps1\")",
+      "PowerShell($ProgressPreference='SilentlyContinue'; & \"$env:TEMP\\\\dotnet-install.ps1\" -Channel 8.0 -InstallDir \"$env:USERPROFILE\\\\.dotnet8\" -NoPath 2>&1 | Select-Object -Last 15)",
+      "Bash(git add *)",
+      "Bash(git -c user.name=Anshuman -c user.email=anshuman.das@gmail.com commit -q -m 'Phase 1: habit reminder sweep + goals with deterministic projection *)",
+      "Bash(git -C /c/workspace/myFinance status --short)",
+      "Bash(git -c user.name=Anshuman -c user.email=anshuman.das@gmail.com commit -q -m 'Phase 1: Medications + Medical ICE card *)"
+    ]
+  }
+}

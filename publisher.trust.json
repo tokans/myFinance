@@ -1,0 +1,47 @@
+{
+  "$comment": "G4 — baked root of trust. PASTE the REAL public keys from the offline root→roles ceremony into each publicKeyHex below. Every publicKeyHex MUST be byte-identical to the same-named slot in src/suite/config.ts (ROOT/DATA/CODE/SNAPSHOT/TIMESTAMP_PUBKEY_HEX). The root is immutable after install and held offline (HSM); operational keys are delegated by it and rotate. publisher-ci key-separation requires every role to be a DISTINCT key. See THREAT_MODEL.md §2.",
+  "root": {
+    "keyId": "tokans-root-v1",
+    "algo": "ed25519",
+    "publicKeyHex": "1263032bfd81dcc63ad7971b580a0eb058b4490ea9e43a59b4610ea46d1eaa82",
+    "offline": true,
+    "immutable": true
+  },
+  "delegations": {
+    "data": {
+      "keyId": "tokans-data-v1",
+      "algo": "ed25519",
+      "publicKeyHex": "112a70aa781c0cdff5528c4283e95a8a5d180f6ce35b1cf7ea0bbfdd34d5a052",
+      "threshold": 1,
+      "signedByRoot": true
+    },
+    "code": {
+      "keyId": "tokans-code-v1",
+      "algo": "ed25519",
+      "publicKeyHex": "e446a0fa35cd988d426c0879f262939db63d2a6ee1b6fe5f6bc635148ba4d6e1",
+      "threshold": 2,
+      "signedByRoot": true
+    },
+    "snapshot": {
+      "keyId": "tokans-snapshot-v1",
+      "algo": "ed25519",
+      "publicKeyHex": "afb782e4a93cd7b3583ab7ad4dbce64667e0d52bfaa55d9e245852a8272269a8",
+      "signedByRoot": true
+    },
+    "timestamp": {
+      "keyId": "tokans-timestamp-v1",
+      "algo": "ed25519",
+      "publicKeyHex": "0446856eba222a2721372b4d8f93de16392cfff7b691ec0dcddf7122050e0ffd",
+      "signedByRoot": true,
+      "maxExpiryDays": 7
+    }
+  },
+  "feed": {
+    "$comment": "Rolling GitHub Releases tag in the myFinance repo that serves the signed suite metadata/targets (release + masters published here). Kept byte-identical to SUITE_FEED_BASE_URL in src/suite/config.ts.",
+    "baseUrl": "https://github.com/tokans/myFinance/releases/download/suite-latest",
+    "anchorSource": "baked"
+  },
+  "newAppOnboarding": {
+    "requireRootDelegation": true
+  }
+}

@@ -1,0 +1,38 @@
+/* Suite-default theme tokens + base reset (shared) — see sharedCoreLib/CONTRACT.md §4.2. */
+@import "sharedcorelib/ui/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* myFinance brand override — only the tokens that differ from the suite default (blue identity).
+     Declared after the shared import so the cascade lets these win. */
+  :root {
+    --primary: 221.2 83.2% 53.3%;
+    --ring: 221.2 83.2% 53.3%;
+  }
+  .dark {
+    --primary: 217.2 91.2% 59.8%;
+    --ring: 224.3 76.3% 48%;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  /* App-specific body styling (bg/fg/antialiased + border-color come from the shared theme.css). */
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* Mobile safe areas.
+       iOS/desktop get the real values from env(). Android WebView does NOT
+       populate env(safe-area-inset-*) for the status/navigation bars, so the
+       native shell (MainActivity.onWebViewCreate) reads the window insets and
+       sets --safe-* on :root, which then overrides the env() fallback below. */
+    padding-top: var(--safe-top, env(safe-area-inset-top));
+    padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom));
+    padding-left: var(--safe-left, env(safe-area-inset-left));
+    padding-right: var(--safe-right, env(safe-area-inset-right));
+  }
+}

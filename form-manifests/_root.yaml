@@ -1,0 +1,207 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  _root.yaml — myFinance UISystemManifest (form-engine v1.0.0)                ║
+# ║                                                                              ║
+# ║  Stitches together navigation, screens, and shared conditions.               ║
+# ║  Per-page forms live in sibling files and are referenced by manifest_id.     ║
+# ║                                                                              ║
+# ║  Render entry:                                                               ║
+# ║    <FormEngine manifest={loaded} screen="dashboard_screen" />                ║
+# ║                                                                              ║
+# ║  Context the host (Tauri shell) must inject so conditions/visibility work:   ║
+# ║    is_tauri:           boolean — true inside the desktop app                 ║
+# ║    has_master_password: boolean — vault snapshot exists on disk              ║
+# ║    vault_unlocked:     boolean — session has an unlocked Stronghold handle   ║
+# ║    currency:           string  — user setting (INR, USD, ...)                ║
+# ║    fy_start_month:     number  — 1 (calendar) or 4 (India FY)                ║
+# ║    date_format:        string  — DD/MM/YYYY | MM/DD/YYYY | YYYY-MM-DD        ║
+# ║    current_month:      string  — YYYY-MM, derived in the host                ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance
+manifest_version: "1.0.0"
+description: >
+  Personal finance app — client-only Tauri+React shell. This manifest declares
+  the navigation, screens, and forms; the host (Rust shell) supplies all data
+  via SQLite plugin and Stronghold for credentials.
+
+namespaces: [core, uam, form, ui]
+
+engine:
+  mode: reactive
+  evaluation_order: dependency
+  error_mode: collect-all
+  debounce_ms: 200
+
+# ── Includes (logical — concatenate these files into a single manifest at build)
+# Listed here for documentation; the actual loader merges them at runtime.
+# - settings.yaml
+# - accounts.yaml
+# - snapshot.yaml
+# - goals.yaml
+# - monthly-update.yaml
+# - import-excel.yaml
+# - fire-calculator.yaml
+# - tax-wizard.yaml
+# - tax-import.yaml
+# - vault.yaml
+
+# ── Shared conditions reused across forms ────────────────────────────────────
+conditions:
+
+  is_tauri:
+    description: Running inside the Tauri desktop shell (SQLite + Stronghold available)
+    condition: { field: $context.is_tauri, op: is_true }
+
+  is_browser:
+    description: Browser preview mode (no DB, no vault)
+    condition: { field: $context.is_tauri, op: is_false }
+
+  vault_exists:
+    description: A Stronghold snapshot has been created (master password is set)
+    condition: { field: $context.has_master_password, op: is_true }
+
+  vault_first_time:
+    description: No vault yet — show "set up" flow
+    condition: { field: $context.has_master_password, op: is_false }
+
+  vault_unlocked:
+    description: Current session has the vault decrypted
+    condition: { field: $context.vault_unlocked, op: is_true }
+
+  vault_locked:
+    description: Vault exists but is locked (or not yet created)
+    condition: { field: $context.vault_unlocked, op: is_false }
+
+# ── Navigation (mirrors src/components/layout/AppShell.tsx + HashRouter) ─────
+navigation:
+  type: stack
+  routes:
+    dashboard_route:    { screen: dashboard_screen,     path: /,                 auth_required: false }
+    accounts_route:     { screen: accounts_screen,      path: /accounts,         auth_required: false }
+    account_detail:     { screen: account_detail_screen, path: /accounts/:id,    auth_required: false }
+    tax_route:          { screen: tax_screen,           path: /tax,              auth_required: false }
+    tax_detail:         { screen: tax_detail_screen,    path: /tax/:ay,          auth_required: false }
+    tax_wizard:         { screen: tax_wizard_screen,    path: /tax/wizard,       auth_required: false }
+    tax_import:         { screen: tax_import_screen,    path: /tax/import,       auth_required: false }
+    import_route:       { screen: import_screen,        path: /import,           auth_required: false }
+    export_route:       { screen: export_screen,        path: /export,           auth_required: false }
+    goals_route:        { screen: goals_screen,         path: /goals,            auth_required: false }
+    fire_route:         { screen: fire_screen,          path: /fire,             auth_required: false }
+    update_route:       { screen: monthly_update_screen, path: /update,          auth_required: false }
+    settings_route:     { screen: settings_screen,      path: /settings,         auth_required: false }
+
+# ── Screens (each binds to a Form or display component in the sibling files) ─
+# The actual form definitions are in their own files; here we only list which
+# form each screen renders, plus any environment-gated banners.
+screens:
+
+  dashboard_screen:
+    name: Dashboard
+    label: Dashboard
+    components:
+      - { component_ref: tauri_required_banner, direction: Top }
+      # Pure read-only — no form. Rendered by host component.
+
+  accounts_screen:
+    name: Accounts
+    label: Accounts
+    components:
+      - { component_ref: tauri_required_banner, direction: Top }
+      - { component_ref: accounts_list_component, direction: Center }
+
+  account_detail_screen:
+    name: AccountDetail
+    label: Account
+    components:
+      - { component_ref: account_form_component, direction: Top }
+      - { component_ref: snapshot_form_component, direction: Center }
+      - { component_ref: credential_panel_component, direction: Bottom }
+
+  settings_screen:
+    name: Settings
+    label: Settings
+    components:
+      - { component_ref: tauri_required_banner, direction: Top }
+      - { component_ref: settings_form_component, direction: Center }
+      - { component_ref: vault_panel_component, direction: Bottom }
+
+  goals_screen:
+    name: Goals
+    label: Goals
+    components:
+      - { component_ref: tauri_required_banner, direction: Top }
+      - { component_ref: goals_list_component, direction: Center }
+
+  monthly_update_screen:
+    name: MonthlyUpdate
+    label: Monthly update
+    components:
+      - { component_ref: monthly_update_wizard_component, direction: Center }
+
+  import_screen:
+    name: ImportExcel
+    label: Import Excel
+    components:
+      - { component_ref: import_wizard_component, direction: Center }
+
+  export_screen:
+    name: ExportExcel
+    label: Export Excel
+    components:
+      - { component_ref: tauri_required_banner, direction: Top }
+      # Export is a single button — no form-engine form needed.
+
+  fire_screen:
+    name: FireCalculator
+    label: FIRE
+    components:
+      - { component_ref: fire_wizard_component, direction: Center }
+
+  tax_screen:
+    name: TaxList
+    label: Tax
+    components: []  # Pure read-only list; rendered by host
+
+  tax_detail_screen:
+    name: TaxDetail
+    label: Tax year
+    components: []  # Read-only detail
+
+  tax_wizard_screen:
+    name: TaxWizard
+    label: ITR form picker
+    components:
+      - { component_ref: tax_wizard_component, direction: Center }
+
+  tax_import_screen:
+    name: TaxImport
+    label: Import ITR JSON
+    components:
+      - { component_ref: tax_import_component, direction: Center }
+
+# ── Components (refs that point to forms in sibling files) ───────────────────
+components:
+
+  tauri_required_banner:
+    name: TauriRequiredBanner
+    type: Custom
+    condition: { ref: is_browser }
+    props:
+      tone: warning
+      message: >
+        Running in the browser without Tauri. Data is stored in SQLite/Stronghold,
+        which only run inside the desktop or mobile app. Start with
+        `npm run tauri:dev` to read and write data.
+
+  accounts_list_component:    { name: AccountsList, type: Custom, props: { source: db.accounts } }
+  account_form_component:     { name: AccountFormInline, type: Form, form_ref: account_form, form_embed: { mode: inline } }
+  snapshot_form_component:    { name: SnapshotFormInline, type: Form, form_ref: snapshot_form, form_embed: { mode: inline } }
+  credential_panel_component: { name: CredentialPanel, type: Form, form_ref: credential_form, form_embed: { mode: panel } }
+  settings_form_component:    { name: SettingsForm, type: Form, form_ref: settings_form, form_embed: { mode: inline } }
+  vault_panel_component:      { name: VaultPanel, type: Form, form_ref: vault_unlock_form, form_embed: { mode: panel } }
+  goals_list_component:       { name: GoalsList, type: Custom, props: { source: db.goals, form_ref: goal_form } }
+  monthly_update_wizard_component: { name: MonthlyUpdateWizard, type: Form, form_ref: monthly_update, form_embed: { mode: inline } }
+  import_wizard_component:    { name: ImportWizard, type: Form, form_ref: import_excel, form_embed: { mode: inline } }
+  fire_wizard_component:      { name: FireWizard, type: Form, form_ref: fire_calculator, form_embed: { mode: inline } }
+  tax_wizard_component:       { name: TaxWizard, type: Form, form_ref: tax_form_picker, form_embed: { mode: inline } }
+  tax_import_component:       { name: TaxImport, type: Form, form_ref: tax_import_itr, form_embed: { mode: inline } }

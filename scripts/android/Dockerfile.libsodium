@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------------------
+#  Builds version-exact static libsodium.a for all Android ABIs.
+#
+#  The heavy work (NDK download + 4 cross-compiles) happens once during
+#  `docker build` and is cached in the image. `docker run -v <host>:/out`
+#  then just copies the .a files into src-tauri/vendor/libsodium.
+#
+#  libsodium VERSION MUST MATCH the one vendored by libsodium-sys-stable
+#  (currently 1.0.22) so the crate's bundled headers match the linked lib.
+# ---------------------------------------------------------------------------
+FROM ubuntu:22.04
+
+ARG NDK_VERSION=android-ndk-r27c
+ARG LIBSODIUM=libsodium-1.0.22-stable
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl ca-certificates unzip make build-essential file && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+# Android NDK (Linux) — provides the cross clang toolchain.
+RUN curl -fsSL -o ndk.zip "https://dl.google.com/android/repository/${NDK_VERSION}-linux.zip" && \
+    unzip -q ndk.zip && rm ndk.zip
+ENV ANDROID_NDK_HOME=/opt/${NDK_VERSION}
+
+# libsodium source — pinned to match libsodium-sys-stable's vendored version.
+RUN curl -fsSL -o libsodium.tar.gz "https://download.libsodium.org/libsodium/releases/${LIBSODIUM}.tar.gz" && \
+    tar xzf libsodium.tar.gz && rm libsodium.tar.gz
+
+ENV NDK_PLATFORM=android-24
+
+COPY build-libsodium-android.sh /opt/build-libsodium-android.sh
+# Strip any CRLF (file may be checked out on Windows) then build all ABIs.
+RUN sed -i 's/\r$//' /opt/build-libsodium-android.sh && \
+    chmod +x /opt/build-libsodium-android.sh && \
+    /opt/build-libsodium-android.sh
+
+# `docker run --rm -v "<abs>\src-tauri\vendor\libsodium:/out" <image>`
+CMD ["sh", "-c", "cp -rv /opt/out/. /out/"]

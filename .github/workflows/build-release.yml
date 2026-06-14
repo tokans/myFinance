@@ -1,0 +1,645 @@
+name: Build & Release
+
+# Runs ONLY in the PUBLIC repo (tokans/myFinance).
+#
+# Triggered by the release tag that mirror-to-public.yml pushes here from the
+# private dev repo. It builds the desktop (Windows + macOS) and experimental
+# mobile bundles, code-signs them, and publishes one GitHub Release + refreshes
+# the README and the gh-pages landing site — all in this public repo.
+#
+# Signing:
+#   - Windows: SignPath Foundation (free OSS code-signing). Because this build
+#     runs in the PUBLIC repo's CI, SignPath can origin-verify the signature.
+#     The sign-windows job passes the UNSIGNED bundles through unchanged until
+#     SIGNPATH_API_TOKEN + the project slugs are configured, so releases keep
+#     working before SignPath approval.
+#   - macOS: tauri-action notarizes + staples when the APPLE_* secrets are set;
+#     until then the .dmg is built unsigned.
+#
+# Because everything happens in this one repo, the publish/README/Pages steps
+# use the built-in GITHUB_TOKEN — no cross-repo PAT (PUBLISH_TOKEN) is needed
+# here. sharedCoreLib is a PUBLIC sibling, checked out without a token.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. v0.1.0)"
+        required: true
+        type: string
+
+env:
+  PUBLISH_REPO: tokans/myFinance
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Resolve the version string once so every job agrees on it.
+  # ---------------------------------------------------------------------------
+  version:
+    # Guard: this pipeline only runs in the public repo. In the private repo the
+    # same file exists (it's mirrored from source) but every job is skipped.
+    if: github.repository == 'tokans/myFinance'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2. Build native bundles on each OS and upload them as workflow artifacts.
+  #    Windows uploads an INTERMEDIATE artifact (staging-windows) that the
+  #    sign-windows job signs and re-publishes as bundles-windows.
+  # ---------------------------------------------------------------------------
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            artifact: windows
+            upload_name: staging-windows     # signed later → bundles-windows
+          - platform: macos-latest           # Universal (Intel + Apple Silicon)
+            artifact: macos-universal
+            upload_name: bundles-macos-universal
+            args: "--target universal-apple-darwin"
+            # Both archs are needed to lipo a universal binary; the arm64 runner
+            # cross-compiles x86_64. Avoids the retiring macos-13 Intel runner.
+            rust-target: aarch64-apple-darwin,x86_64-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        working-directory: myFinance
+    steps:
+      # The app consumes the PUBLIC sibling sharedCoreLib via a file:../ path.
+      # @mydemo/core is an OPTIONAL dep (demo rig only) and is intentionally NOT
+      # checked out — `npm ci --omit=optional` skips it, so the public build
+      # depends on public repos only.
+      - name: Check out myFinance (this public repo)
+        uses: actions/checkout@v4
+        with:
+          path: myFinance
+      - name: Check out sharedCoreLib (public, file:../sharedCoreLib)
+        uses: actions/checkout@v4
+        with:
+          repository: tokans/sharedCoreLib
+          ref: master
+          path: sharedCoreLib
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "myFinance/src-tauri -> target"
+          key: ${{ matrix.artifact }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: myFinance/package-lock.json
+
+      - name: Install sharedCoreLib deps (prebuild builds the lib from these)
+        working-directory: sharedCoreLib
+        run: npm ci
+
+      - name: Install npm dependencies
+        # --omit=optional skips the private @mydemo/core demo rig (absent here).
+        run: npm ci --omit=optional
+
+      # tauri-action runs `npm run build` (beforeBuildCommand) + `tauri build`,
+      # then exposes the produced bundle paths as `artifactPaths`.
+      - name: Build Tauri app
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing + notarization. No-op on Windows and no-op when the
+          # secrets are unset (then the .dmg is built unsigned).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: myFinance
+          args: ${{ matrix.args }}
+
+      - name: Collect built bundles
+        shell: bash
+        run: |
+          # Write to the workspace root: upload-artifact resolves `path` against
+          # GITHUB_WORKSPACE, not this step's working-directory (myFinance).
+          DEST="$GITHUB_WORKSPACE/dist-bundles"
+          mkdir -p "$DEST"
+          # artifactPaths is a JSON array of absolute file paths.
+          echo '${{ steps.tauri.outputs.artifactPaths }}' \
+            | tr -d '[]"' | tr ',' '\n' | sed '/^$/d' \
+            | while read -r f; do
+                [ -f "$f" ] && cp "$f" "$DEST/" || echo "skip: $f"
+              done
+          ls -la "$DEST"
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.upload_name }}
+          path: dist-bundles/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2d. Sign the Windows bundles via SignPath Foundation (free OSS signing).
+  #
+  #     Origin-verified: this build runs in the PUBLIC tokans repo, which is what
+  #     lets SignPath attest the signature. The job is a PASS-THROUGH until
+  #     SIGNPATH_API_TOKEN + the project slugs below are filled in — it then
+  #     republishes the unsigned bundles as bundles-windows so the release still
+  #     ships. Once SignPath is approved:
+  #       1. add the SIGNPATH_API_TOKEN secret to this repo,
+  #       2. set organization-id / project-slug / signing-policy-slug /
+  #          artifact-configuration-slug below to the values from your SignPath
+  #          project, and
+  #       3. confirm the action input names against the version you pin.
+  # ---------------------------------------------------------------------------
+  sign-windows:
+    needs: [version, build]
+    if: github.repository == 'tokans/myFinance'
+    runs-on: ubuntu-latest
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    steps:
+      - name: Download unsigned Windows bundles
+        id: dl
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-windows
+          path: windows
+
+      - name: Submit to SignPath for signing
+        id: signpath
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: REPLACE_WITH_SIGNPATH_ORGANIZATION_ID
+          project-slug: myfinance
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-installers
+          github-artifact-id: ${{ steps.dl.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: windows-signed
+
+      - name: Stage signed (or pass-through unsigned) bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d windows-signed ] && [ -n "$(ls -A windows-signed 2>/dev/null || true)" ]; then
+            echo "Publishing SignPath-SIGNED Windows bundles."
+            SRC=windows-signed
+          else
+            echo "::warning::SignPath not configured — publishing UNSIGNED Windows bundles."
+            SRC=windows
+          fi
+          mkdir -p out && cp -r "$SRC"/. out/
+          ls -la out
+
+      - name: Upload Windows bundles (final)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-windows
+          path: out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2b. Android — debug-signed APK (installable now) + unsigned release AAB.
+  #
+  #     EXPERIMENTAL / unsigned: this job is `continue-on-error` so a mobile
+  #     hiccup never blocks the desktop release. The APK is signed with the
+  #     Android *debug* key (sideloadable but NOT production); the AAB is left
+  #     unsigned for a future Play upload. To ship production artifacts, add a
+  #     release keystore via secrets and a signingConfig (see the TODO below),
+  #     then flip `continue-on-error` to false.
+  #
+  #     Only arm64-v8a is built. Stronghold's libsodium-sys-stable has no
+  #     Android prebuilt and SODIUM_LIB_DIR points at a single ABI dir, so a
+  #     one-shot multi-ABI build can't be linked here; arm64 covers essentially
+  #     all real devices. Adding more ABIs means a per-ABI build loop.
+  # ---------------------------------------------------------------------------
+  build-android:
+    needs: version
+    if: github.repository == 'tokans/myFinance'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: myFinance
+    steps:
+      - name: Check out myFinance (this public repo)
+        uses: actions/checkout@v4
+        with:
+          path: myFinance
+      - name: Check out sharedCoreLib (public, file:../sharedCoreLib)
+        uses: actions/checkout@v4
+        with:
+          repository: tokans/sharedCoreLib
+          ref: master
+          path: sharedCoreLib
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Pin the NDK that compiles the app's Rust to r27c — the same version the
+      # libsodium Docker image uses — so the toolchains agree.
+      - name: Set up Android NDK (r27c)
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          add-to-path: false
+
+      - name: Export NDK env
+        shell: bash
+        run: |
+          echo "ANDROID_NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+
+      - name: Set up Rust (Android target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "myFinance/src-tauri -> target"
+          key: android-aarch64
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: myFinance/package-lock.json
+
+      - name: Install sharedCoreLib deps (prebuild builds the lib from these)
+        working-directory: sharedCoreLib
+        run: npm ci
+
+      - name: Install npm dependencies
+        run: npm ci --omit=optional
+
+      # libsodium.a for Android — built version-exact in a Linux container, same
+      # as build-android.bat does locally. The image cross-compiles every ABI;
+      # `docker run` copies them into src-tauri/vendor/libsodium/<target>/.
+      - name: Cross-build libsodium.a (Docker)
+        run: |
+          docker build -t myfinance-libsodium-android:1.0.22 \
+            -f scripts/android/Dockerfile.libsodium scripts/android
+          mkdir -p src-tauri/vendor/libsodium
+          docker run --rm -v "$PWD/src-tauri/vendor/libsodium:/out" \
+            myfinance-libsodium-android:1.0.22
+          ls -R src-tauri/vendor/libsodium
+
+      # gen/android is gitignored, so regenerate the Gradle project each run.
+      - name: Initialize the Android project
+        run: npx tauri android init
+
+      # SODIUM_LIB_DIR makes libsodium-sys-stable link our prebuilt .a instead of
+      # autotools-building from source. It's a single dir, hence one ABI (arm64).
+      - name: Build Android APK (debug) + AAB (release, unsigned)
+        env:
+          SODIUM_LIB_DIR: ${{ github.workspace }}/myFinance/src-tauri/vendor/libsodium/aarch64-linux-android
+        run: |
+          # Debug build → APK auto-signed with the Android debug key → installable.
+          npx tauri android build --target aarch64 --debug --apk
+          # Release AAB → unsigned; sign with a real upload key before Play upload.
+          # TODO(signing): with an ANDROID_KEYSTORE secret, configure a release
+          # signingConfig and build `--apk --aab` (no --debug) for production.
+          npx tauri android build --target aarch64 --aab
+
+      - name: Collect Android bundles
+        shell: bash
+        run: |
+          DEST="$GITHUB_WORKSPACE/dist-bundles"
+          mkdir -p "$DEST"
+          find src-tauri/gen/android -path '*/outputs/*' \
+            \( -name '*.apk' -o -name '*.aab' \) -exec cp {} "$DEST/" \;
+          ls -la "$DEST"
+
+      - name: Upload Android bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-android
+          path: dist-bundles/*
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2c. iOS — UNSIGNED build (verifies the iOS target compiles).
+  #
+  #     EXPERIMENTAL / unsigned: this job is `continue-on-error`. Without an
+  #     Apple Developer cert + provisioning profile, xcodebuild cannot produce a
+  #     device-installable .ipa, so this job's value is "iOS compiles"; any
+  #     archive/.app it produces is uploaded best-effort. To ship a real IPA, add
+  #     APPLE_CERTIFICATE / APPLE_PROVISIONING secrets and switch the export
+  #     method to ad-hoc / app-store-connect, then flip `continue-on-error`.
+  # ---------------------------------------------------------------------------
+  build-ios:
+    needs: version
+    if: github.repository == 'tokans/myFinance'
+    runs-on: macos-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: myFinance
+    steps:
+      - name: Check out myFinance (this public repo)
+        uses: actions/checkout@v4
+        with:
+          path: myFinance
+      - name: Check out sharedCoreLib (public, file:../sharedCoreLib)
+        uses: actions/checkout@v4
+        with:
+          repository: tokans/sharedCoreLib
+          ref: master
+          path: sharedCoreLib
+
+      - name: Set up Rust (iOS target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "myFinance/src-tauri -> target"
+          key: ios-aarch64
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: myFinance/package-lock.json
+
+      - name: Install sharedCoreLib deps (prebuild builds the lib from these)
+        working-directory: sharedCoreLib
+        run: npm ci
+
+      - name: Install npm dependencies
+        run: npm ci --omit=optional
+
+      # gen/apple is gitignored, so regenerate the Xcode project each run, then
+      # inject the LAN-sync Info.plist keys the app needs.
+      - name: Initialize the iOS project
+        run: npx tauri ios init
+
+      - name: Inject local-network sync plist keys
+        run: npm run ios:plist
+
+      # Unsigned: no team/cert, so the export step is expected to fail — the job
+      # is continue-on-error and we still publish anything xcodebuild produced.
+      - name: Build iOS app (unsigned)
+        run: npx tauri ios build --target aarch64 --export-method debugging
+
+      - name: Collect iOS bundles
+        if: always()
+        shell: bash
+        run: |
+          DEST="$GITHUB_WORKSPACE/dist-bundles"
+          mkdir -p "$DEST"
+          find src-tauri/gen/apple -name '*.ipa' -exec cp {} "$DEST/" \; 2>/dev/null || true
+          ls -la "$DEST" || true
+
+      - name: Upload iOS bundles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-ios
+          path: dist-bundles/*
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 3. Gather every platform's bundles and publish one release on this repo.
+  #    bundles-windows comes from sign-windows (signed/pass-through); the rest
+  #    come straight from their build jobs.
+  # ---------------------------------------------------------------------------
+  publish:
+    needs: [version, build, sign-windows, build-android, build-ios]
+    if: github.repository == 'tokans/myFinance'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # create the Release + push README/gh-pages
+    steps:
+      # Check out this repo so the Pages step can read the landing-page template
+      # at .github/pages/index.template.html.
+      - name: Check out source repo
+        uses: actions/checkout@v4
+
+      - name: Download all bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bundles-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -R release-assets
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --repo "$PUBLISH_REPO" \
+            --title "myFinance $VERSION" \
+            --generate-notes \
+            release-assets/*
+
+      # -----------------------------------------------------------------------
+      # Refresh README.md on this repo with customer-facing product details plus
+      # the notes for the release we just published.
+      # -----------------------------------------------------------------------
+      - name: Update README
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Clone this repo (shallow) so we can commit the README.
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${PUBLISH_REPO}.git" \
+            dest-repo
+          cd dest-repo
+
+          # Pull the auto-generated notes for this release.
+          NOTES="$(gh release view "$VERSION" --repo "$PUBLISH_REPO" --json body --jq .body)"
+
+          RELEASE_URL="https://github.com/${PUBLISH_REPO}/releases/tag/${VERSION}"
+          # GitHub Pages site for this repo (gh-pages branch, root):
+          # https://<owner>.github.io/<repo>/ — derived so it follows PUBLISH_REPO.
+          SITE_URL="https://${PUBLISH_REPO%/*}.github.io/${PUBLISH_REPO#*/}/"
+          {
+            cat <<EOF
+          # myFinance
+
+          **Your money, on your machine.** myFinance is a private, offline-first
+          personal finance tracker. Your data never leaves your device — there is
+          no account, no cloud, and no server.
+
+          🌐 **Website:** [${SITE_URL}](${SITE_URL})
+
+          ## What it does
+
+          - 📊 **Track net worth over time** — monthly snapshots of every account,
+            with month-over-month and financial-year trends.
+          - 📁 **Excel in, Excel out** — import your existing spreadsheet and export
+            back to it. Excel stays the source of truth you own.
+          - 🎯 **Goals & projections** — set targets and see realistic ETAs based on
+            your actual saving pace.
+          - 🧾 **Tax helper** — import official ITR JSON exports and get an advisory
+            ITR-form recommendation.
+          - 🔐 **Encrypted vault** — sensitive account credentials are protected by a
+            master password (Argon2id + Stronghold). Nothing is stored in plain text.
+          - 💱 **Configurable currency & financial year** (January or April start).
+
+          ## Download
+
+          Browse screenshots, the demo, and what's new on the
+          [project website](${SITE_URL}), or grab the installer for your platform
+          from the [latest release](https://github.com/${PUBLISH_REPO}/releases/latest):
+
+          | Platform | File |
+          | --- | --- |
+          | Windows | \`.msi\` / \`.exe\` installer |
+          | macOS (Intel + Apple Silicon) | universal \`.dmg\` |
+          | Android (arm64, experimental) | \`.apk\` (sideload) · \`.aab\` |
+          | iOS (experimental) | unsigned build |
+
+          All assets for this version are attached to the
+          [${VERSION} release](${RELEASE_URL}).
+
+          > Mobile builds are **experimental and unsigned** for now: the Android
+          > \`.apk\` is debug-signed (sideloadable, not production) and iOS is not
+          > yet code-signed. Production signing is wired up separately.
+
+          ## Privacy
+
+          myFinance has **no backend and no telemetry**. All data lives in a local
+          SQLite database and an encrypted vault on your own machine.
+
+          ---
+
+          ## Release notes — ${VERSION}
+
+          EOF
+            echo "$NOTES"
+            cat <<'EOF'
+
+          ---
+
+          _This README is generated automatically on each release._
+          EOF
+          } > README.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: update README for ${VERSION}" || {
+            echo "No README changes to commit."; exit 0;
+          }
+          git push
+
+      # -----------------------------------------------------------------------
+      # Publish a full marketing landing page to the gh-pages branch of this
+      # repo. Served at https://tokans.github.io/myFinance/ once Pages is enabled
+      # (one-time: Settings -> Pages -> Deploy from a branch -> gh-pages / root).
+      # The current release's notes are rendered on the page, so the site
+      # refreshes on every release alongside the README.
+      # -----------------------------------------------------------------------
+      - name: Update GitHub Pages site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_URL="https://github.com/${PUBLISH_REPO}/releases/tag/${VERSION}"
+          LATEST_URL="https://github.com/${PUBLISH_REPO}/releases/latest"
+          AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${PUBLISH_REPO}.git"
+
+          # Auto-generated notes for this release (rendered client-side on the page).
+          NOTES="$(gh release view "$VERSION" --repo "$PUBLISH_REPO" --json body --jq .body)"
+
+          # Clone the existing gh-pages branch so manually-added assets (screenshots
+          # under assets/, a CNAME file, etc.) survive; create it the first time.
+          if git clone --depth 1 --branch gh-pages "$AUTH_URL" site 2>/dev/null; then
+            echo "Updating existing gh-pages branch."
+          else
+            echo "gh-pages branch not found; creating it."
+            git clone --depth 1 "$AUTH_URL" site
+            ( cd site && git checkout --orphan gh-pages && git rm -rf . >/dev/null 2>&1 || true )
+          fi
+          cd site
+
+          # Release notes live in their own file the page fetches at runtime, so we
+          # never have to escape arbitrary markdown inside the HTML below.
+          printf '%s\n' "$NOTES" > release-notes.md
+
+          # Don't let GitHub's Jekyll pipeline touch our static files.
+          touch .nojekyll
+
+          # Ship the tracked page assets (e.g. the demo video assets/demo.mp4)
+          # from this repo into the site, overwriting any prior copy.
+          if [ -d "${GITHUB_WORKSPACE}/.github/pages/assets" ]; then
+            mkdir -p assets
+            cp -R "${GITHUB_WORKSPACE}/.github/pages/assets/." assets/
+          fi
+
+          # Render the landing page from the editable template in this repo
+          # (.github/pages/index.template.html), filling in the per-release
+          # values. URLs contain no '|', so it is a safe sed delimiter.
+          sed \
+            -e "s|__VERSION__|${VERSION}|g" \
+            -e "s|__REPO__|${PUBLISH_REPO}|g" \
+            -e "s|__RELEASE_URL__|${RELEASE_URL}|g" \
+            -e "s|__LATEST_URL__|${LATEST_URL}|g" \
+            "${GITHUB_WORKSPACE}/.github/pages/index.template.html" > index.html
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "site: publish ${VERSION} landing page" || {
+            echo "No site changes to commit."; exit 0;
+          }
+          git push origin HEAD:gh-pages

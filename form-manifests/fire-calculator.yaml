@@ -1,0 +1,444 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  fire-calculator.yaml — FIRE planning wizard                                ║
+# ║  Source: src/pages/Fire.tsx + src/domain/fire.ts                            ║
+# ║                                                                              ║
+# ║  8 steps (Welcome → Life stage → Snapshot → Vision → Spending → Goals →     ║
+# ║   Risk → Plan). Last step is a read-only computed view of computeFirePlan().║
+# ║                                                                              ║
+# ║  Prefill hooks (host runs these on form load):                              ║
+# ║   - current_net_worth ← totalsByMonth() latest                              ║
+# ║   - selected_existing_goal_ids ← listGoals()                                ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_fire
+manifest_version: "1.0.0"
+description: Multi-step FIRE (Financial Independence, Retire Early) planner.
+
+conditions:
+  target_age_valid:
+    description: Target FIRE age must exceed current age
+    expression: "fields.target_age > fields.current_age && fields.target_age < 100"
+
+forms:
+
+  fire_calculator:
+    title: FIRE calculator
+    description: Financial Independence, Retire Early
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Confidential
+    layout:
+      type: wizard
+      progress: bar
+    state:
+      persistence: in-memory
+    submit_label: See my FIRE plan
+    on_submit:
+      type: local
+      handler_name: domain.fire.computeFirePlan
+      success_message: Plan computed.
+
+    pages:
+
+      # ── 0. Welcome ───────────────────────────────────────────────────────
+      - id: welcome
+        title: Welcome
+        sections:
+          - id: welcome_body
+            display: read-only
+            description: >
+              Let's figure out your FIRE number — the amount you need invested
+              to never have to work again. A few questions across your
+              finances, lifestyle, and the life you want to build.
+            fields:
+              - id: prefill_notice
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    $context.is_tauri && $context.prefill
+                      ? "Prefilled: net worth " + formatMoney($context.prefill.netWorth, $context.currency) +
+                        " · " + $context.prefill.existingGoalCount + " existing goal(s)."
+                      : null
+
+      # ── 1. Life stage ─────────────────────────────────────────────────────
+      - id: life_stage
+        title: Life stage
+        sections:
+          - id: group_a
+            title: "Group A · Life stage & context"
+            fields:
+              - id: current_age
+                type: number
+                label: Your current age
+                required: true
+                number_type: int
+                min: 16
+                max: 110
+                default: 35
+                width: quarter
+
+              - id: country
+                type: text
+                label: Country / city of residence
+                hint: Used for cost-of-living context.
+                placeholder: "e.g. Bengaluru, India"
+                width: half
+
+              - id: household
+                type: select
+                label: Household situation
+                required: true
+                display_as: button-group
+                default: single
+                choices:
+                  static:
+                    - { value: single,         label: "Single, no dependants" }
+                    - { value: partnered,      label: "Partnered, no dependants" }
+                    - { value: single_kids,    label: "Single with kids" }
+                    - { value: partnered_kids, label: "Partnered with kids" }
+                    - { value: other,          label: Other }
+
+      # ── 2. Financial snapshot ────────────────────────────────────────────
+      - id: financial_snapshot
+        title: Financial snapshot
+        sections:
+          - id: group_b
+            title: "Group B · Current financial snapshot"
+            fields:
+
+              - id: annual_income
+                type: number
+                label: Gross annual household income
+                hint: { computed: "'In ' + $context.currency + '.'" }
+                number_type: decimal2
+                min: 0
+                default: 0
+                prefix: { context: currency }
+
+              - id: current_net_worth
+                type: number
+                label: Total saved / invested today (net worth, excl. primary home)
+                hint:
+                  computed: >
+                    $context.prefill
+                      ? "Prefilled from your latest monthly snapshot — adjust if needed."
+                      : 'In ' + $context.currency + '.'
+                number_type: decimal2
+                min: 0
+                default: { context: prefill.netWorth }
+                prefix: { context: currency }
+
+              - id: annual_savings
+                type: number
+                label: Approximate annual savings
+                hint: How much you currently set aside per year.
+                number_type: decimal2
+                min: 0
+                default: 0
+                prefix: { context: currency }
+
+              - id: savings_rate_display
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    fields.annual_income > 0
+                      ? 'Implied savings rate: ' + (fields.annual_savings / fields.annual_income * 100).toFixed(1) + '% of income.'
+                      : null
+
+      # ── 3. Retirement vision ─────────────────────────────────────────────
+      - id: retirement_vision
+        title: Retirement vision
+        sections:
+          - id: group_c
+            title: "Group C · Retirement vision"
+            fields:
+
+              - id: target_age
+                type: number
+                label: Target FIRE age
+                hint: The age you'd love to become financially independent.
+                required: true
+                number_type: int
+                min:
+                  expression: "Math.max(fields.current_age + 1, 25)"
+                max: 99
+                default: 50
+                width: quarter
+                validation:
+                  ref: target_age_valid
+                  message: Must be greater than your current age.
+
+              - id: retirement_location
+                type: select
+                label: Where do you plan to live in retirement?
+                required: true
+                display_as: button-group
+                default: same_city
+                choices:
+                  static:
+                    - { value: same_city,           label: "Same country, same city" }
+                    - { value: same_country_lower, label: "Same country, lower-cost area" }
+                    - { value: abroad_lower,       label: "Move abroad (lower cost)" }
+                    - { value: abroad_similar,     label: "Move abroad (similar cost)" }
+                    - { value: undecided,          label: Undecided }
+
+              - id: lifestyle
+                type: select
+                label: Retirement lifestyle
+                required: true
+                display_as: button-group
+                default: moderate
+                choices:
+                  static:
+                    - { value: lean,        label: Lean,        hint: "Minimal spend, maximum freedom" }
+                    - { value: moderate,    label: Moderate,    hint: "Comfortable but not extravagant" }
+                    - { value: comfortable, label: Comfortable, hint: "Travel, hobbies, dining out regularly" }
+                    - { value: fat,         label: "Fat FIRE",  hint: "Luxury lifestyle, no compromises" }
+
+      # ── 4. Retirement spending ───────────────────────────────────────────
+      - id: retirement_spending
+        title: Spending in retirement
+        sections:
+          - id: group_d
+            title: "Group D · Monthly spending in retirement"
+            description: >
+              What monthly household spend (today's money) do you want to
+              support in retirement? Cover housing, food, transport,
+              healthcare, travel, hobbies, kids, giving.
+            fields:
+
+              - id: monthly_spend_retirement
+                type: number
+                label:
+                  computed: "'Desired monthly household spend (' + $context.currency + ')'"
+                required: true
+                number_type: decimal2
+                min: 1
+                default: 0
+                prefix: { context: currency }
+                validation:
+                  min: 1
+                  min_message: Must be greater than zero.
+
+              - id: annualised_hint
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    fields.monthly_spend_retirement > 0
+                      ? "Annualises to " + formatMoney(fields.monthly_spend_retirement * 12, $context.currency) + "/year today."
+                      : null
+
+      # ── 5. Life goals ────────────────────────────────────────────────────
+      - id: life_goals
+        title: Life goals
+        sections:
+          - id: group_e
+            title: "Group E · Life goals (the why)"
+            description: >
+              FIRE isn't just a number — it's about the life you want to live.
+            fields:
+
+              - id: goal_categories
+                type: multiselect
+                label: Which life goals matter to you?
+                hint: Select all that apply.
+                display_as: chips
+                choices:
+                  dynamic: { source: domain.fire.LIFE_GOAL_CATEGORIES }
+
+              - id: selected_existing_goal_ids
+                type: multiselect
+                label: Your existing goals
+                hint: Already saved in this app. Tick which ones to fold into the FIRE timeline.
+                condition: { expression: "$context.existing_goals.length > 0" }
+                display_as: checkbox
+                default: { expression: "$context.existing_goals.map(g => g.id)" }
+                choices:
+                  dynamic:
+                    source: $context.existing_goals
+                    value_key: id
+                    label_key: name
+                    sub_label_expression: >
+                      "Target " + formatMoney($item.target_amount, $context.currency) +
+                      ($item.target_date ? " by " + $item.target_date : "")
+
+              - id: new_goals
+                type: repeating-group
+                label: Add a new goal
+                hint: These will be saved to your goals list when you finish the wizard.
+                empty_message: No new goals yet.
+                add_button_label: Add goal
+                fields:
+                  - id: name
+                    type: text
+                    label: Goal name
+                    placeholder: "e.g. World trip"
+                    width: half
+                  - id: target_amount
+                    type: number
+                    label: Amount
+                    number_type: decimal2
+                    placeholder: { computed: "'Amount (' + $context.currency + ')'" }
+                    width: quarter
+                    prefix: { context: currency }
+                  - id: target_date
+                    type: date
+                    label: Date
+                    width: quarter
+
+              - id: major_expenses
+                type: multiselect
+                label: Major one-time expenses expected in the next 10 years?
+                display_as: chips
+                choices:
+                  dynamic: { source: domain.fire.MAJOR_EXPENSE_OPTIONS }
+
+      # ── 6. Risk & assumptions ────────────────────────────────────────────
+      - id: risk_assumptions
+        title: Risk & assumptions
+        sections:
+          - id: group_f
+            title: "Group F · Risk & assumptions"
+            fields:
+
+              - id: risk
+                type: select
+                label: How comfortable are you with investment risk?
+                required: true
+                display_as: button-group
+                default: moderate
+                choices:
+                  static:
+                    - { value: conservative, label: "Very conservative", hint: "Bonds / cash heavy · ~3% real return · 3.5% SWR" }
+                    - { value: moderate,     label: Moderate,            hint: "Balanced portfolio · ~5% real return · 4% SWR" }
+                    - { value: growth,       label: "Growth-oriented",   hint: "Mostly equities · ~7% real return · 4.5% SWR" }
+                    - { value: aggressive,   label: Aggressive,          hint: "High equity + alternatives · ~8.5% real return · 4.5% SWR" }
+
+              - id: annual_guaranteed_income
+                type: number
+                label: Annual guaranteed income in retirement (today's money)
+                hint: Pension, NPS annuity, social security, rental income, etc. Use 0 if none.
+                number_type: decimal2
+                min: 0
+                default: 0
+                prefix: { context: currency }
+
+              - id: semi_retirement
+                type: select
+                label: Open to part-time / passion work income in semi-retirement?
+                display_as: button-group
+                default: maybe
+                choices:
+                  static:
+                    - { value: love,        label: "Yes, I'd love that" }
+                    - { value: maybe,       label: "Maybe, if it's enjoyable" }
+                    - { value: passive,     label: "Prefer fully passive" }
+                    - { value: clean_break, label: "Clean break from all work" }
+
+      # ── 7. Results (read-only computed) ──────────────────────────────────
+      - id: results
+        title: Your FIRE plan
+        sections:
+
+          - id: hero
+            display: read-only
+            description:
+              computed: >
+                "Your FIRE number: " + formatMoney(computed.plan.corpus, $context.currency)
+            fields:
+              - id: plan_summary
+                type: hidden
+                source: computed
+                value:
+                  expression: "domain.fire.computeFirePlan(fields)"
+              - id: variant_blurb
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    domain.fire.FIRE_VARIANT_LABEL[computed.plan.variant] + ' — ' +
+                    domain.fire.FIRE_VARIANT_BLURB[computed.plan.variant]
+
+          - id: progress
+            display: read-only
+            description: Progress toward target
+            fields:
+              - id: progress_bar
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    { now: fields.current_net_worth, target: computed.plan.corpus,
+                      pct: computed.plan.progress }
+
+          - id: savings_gap
+            display: read-only
+            description: "Monthly savings: needed vs current"
+            fields:
+              - id: gap
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    { needed: computed.plan.requiredMonthlySavings,
+                      current: computed.plan.currentMonthlySavings,
+                      delta: computed.plan.monthlySavingsGap,
+                      eta: computed.plan.fireAgeAtCurrentSavings }
+
+          - id: timeline
+            display: read-only
+            description: Life goals timeline
+            fields:
+              - id: events
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    [
+                      ...$context.existing_goals.filter(g => fields.selected_existing_goal_ids.includes(g.id) && g.target_date)
+                        .map(g => ({ age: fields.current_age + (Number(g.target_date.slice(0,4)) - new Date().getFullYear()),
+                                     label: g.name, cost: g.target_amount })),
+                      ...fields.new_goals.filter(g => g.name && g.target_amount > 0 && g.target_date)
+                        .map(g => ({ age: fields.current_age + (Number(g.target_date.slice(0,4)) - new Date().getFullYear()),
+                                     label: g.name, cost: g.target_amount })),
+                      { age: fields.target_age, label: 'FIRE achieved', highlight: true }
+                    ].sort((a, b) => a.age - b.age)
+
+          - id: sensitivity_table
+            display: read-only
+            description: "Assumptions & sensitivities"
+            fields:
+              - id: sensitivity
+                type: hidden
+                source: computed
+                value:
+                  expression: "computed.plan.sensitivity"
+
+          - id: next_actions
+            display: read-only
+            description: Your next 3 actions
+            fields:
+              - id: actions_list
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    [
+                      computed.plan.monthlySavingsGap > 0
+                        ? "Increase monthly savings by " + formatMoney(computed.plan.monthlySavingsGap, $context.currency) + " to hit FIRE by " + fields.target_age + "."
+                        : "Maintain your current savings rate — you're on track for FIRE by " + fields.target_age + ".",
+                      "Align your portfolio with a " + domain.fire.RISK_PROFILES[fields.risk].label.toLowerCase() + " allocation.",
+                      ($context.existing_goals.length + fields.new_goals.length > 0)
+                        ? "Track your life goals in the Goals tab."
+                        : "Add at least one near-term goal in the Goals tab."
+                    ]
+
+        actions:
+          - { id: edit,  type: nav-prev, label: Edit answers, icon: arrow-left }
+          - { id: goals, type: nav-link, label: Open my goals, target: "/goals", icon: save }
+
+      # Implicit side-effect on entering `results`: persist new_goals to DB
+      # via db.goals.create. This is wired as a page-enter hook in the host.

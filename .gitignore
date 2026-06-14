@@ -1,0 +1,38 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# tauri
+src-tauri/target
+src-tauri/gen/schemas
+src-tauri/gen/apple
+src-tauri/gen/android
+
+# Android libsodium.a built once via scripts/android/Dockerfile.libsodium
+src-tauri/vendor/libsodium/
+
+# logs
+*.log
+
+# test runners
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# demo capture rig — recordings and vendored native driver
+demo/output/
+demo/.bin/
+
+# master-data OTA: offline signing keys (SECRET) + packed bundle output
+.keys/
+dist-masters/
+
+# patron donation files (generated; may carry per-donor data)
+dist-patron/

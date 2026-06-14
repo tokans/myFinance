@@ -1,0 +1,9 @@
+[
+  { "value": "Doctor", "label": "Doctor", "source": "baked" },
+  { "value": "Lawyer", "label": "Lawyer", "source": "baked" },
+  { "value": "Chartered Accountant", "label": "Chartered Accountant", "source": "baked" },
+  { "value": "Financial Advisor", "label": "Financial Advisor", "source": "baked" },
+  { "value": "Relationship Manager", "label": "Relationship Manager", "source": "baked" },
+  { "value": "Insurance Agent", "label": "Insurance Agent", "source": "baked" },
+  { "value": "Tax Consultant", "label": "Tax Consultant", "source": "baked" }
+]

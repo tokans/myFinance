@@ -1,0 +1,135 @@
+{
+  "_comment": "SYNTHETIC ITR-2 sample for AY 2026-27. Structure mirrors the official ITR-2_AY26-27.json schema; all PAN/TAN/names/amounts are fabricated for parser testing. Not a real return.",
+  "ITR": {
+    "ITR2": {
+      "CreationInfo": {
+        "SWVersionNo": "1.0",
+        "SWCreatedBy": "SW00000000",
+        "JSONCreatedBy": "SW00000000",
+        "JSONCreationDate": "2026-06-01",
+        "IntermediaryCity": "Delhi",
+        "Digest": "-"
+      },
+      "Form_ITR2": {
+        "FormName": "ITR2",
+        "Description": "For Individuals and HUFs not having income from profits and gains of business or profession",
+        "AssessmentYear": "2026",
+        "SchemaVer": "Ver1.0",
+        "FormVer": "Ver1.0"
+      },
+      "PartA_GEN1": {
+        "PersonalInfo": {
+          "AssesseeName": { "FirstName": "Test", "SurNameOrOrgName": "Assessee" },
+          "PAN": "AAAAA1111A",
+          "DOB": "1985-04-12",
+          "Status": "I"
+        },
+        "FilingStatus": {
+          "ReturnFileSec": 11,
+          "OptOutNewTaxRegime": "N"
+        }
+      },
+      "ScheduleS": {
+        "TotalGrossSalary": 1600000,
+        "NetSalary": 1550000,
+        "TotIncUnderHeadSalaries": 1500000
+      },
+      "ScheduleHP": {
+        "TotalIncomeChargeableUnHP": 120000
+      },
+      "ScheduleCGFor23": {
+        "ShortTermCapGainFor23": 50000,
+        "LongTermCapGain23": 200000,
+        "SumOfCGIncm": 250000,
+        "TotScheduleCGFor23": 250000
+      },
+      "ScheduleOS": {
+        "TotOthSrcNoRaceHorse": 30000,
+        "IncChargeable": 30000
+      },
+      "ScheduleVIA": {
+        "DeductUndChapVIA": {
+          "Section80C": 150000,
+          "Section80D": 25000,
+          "Section80CCDEmployer": 60000,
+          "Section80TTA": 8000,
+          "TotalChapVIADeductions": 243000
+        }
+      },
+      "PartB-TI": {
+        "Salaries": 1500000,
+        "IncomeFromHP": 120000,
+        "CapGain": {
+          "ShortTerm": { "TotalShortTerm": 50000 },
+          "LongTerm": { "TotalLongTerm": 200000 },
+          "ShortTermLongTermTotal": 250000,
+          "TotalCapGains": 250000
+        },
+        "IncFromOS": {
+          "OtherSrcThanOwnRaceHorse": 30000,
+          "TotIncFromOS": 30000
+        },
+        "GrossTotalIncome": 1900000,
+        "DeductionsUnderScheduleVIA": 243000,
+        "TotalIncome": 1657000
+      },
+      "PartB_TTI": {
+        "ComputationOfTaxLiability": {
+          "TaxPayableOnTI": { "TaxPayableOnTotInc": 309600 },
+          "Rebate87A": 0,
+          "TaxPayableOnRebate": 309600,
+          "EducationCess": 12384,
+          "GrossTaxLiability": 321984,
+          "GrossTaxPayable": 321984,
+          "NetTaxLiability": 321984,
+          "AggregateTaxInterestLiability": 321984
+        },
+        "Surcharge": 0,
+        "HealthEduCess": 12384,
+        "TotalTaxPayablDeemedTotInc": 0,
+        "TaxPaid": {
+          "TaxesPaid": {
+            "AdvanceTax": 100000,
+            "TDS": 203000,
+            "TCS": 0,
+            "SelfAssessmentTax": 18984,
+            "TotalTaxesPaid": 321984
+          },
+          "BalTaxPayable": 0
+        },
+        "Refund": { "RefundDue": 0 }
+      },
+      "ScheduleIT": {
+        "TaxPayment": [
+          { "BSRCode": "0510308", "DateDep": "2025-09-14", "SrlNoOfChaln": "00001", "Amt": 100000 },
+          { "BSRCode": "0510308", "DateDep": "2026-07-20", "SrlNoOfChaln": "00002", "Amt": 18984 }
+        ],
+        "TotalTaxPayments": 118984
+      },
+      "ScheduleTDS1": {
+        "TDSonSalary": [
+          {
+            "EmployerOrDeductorOrCollectDetl": { "TAN": "DELA00001A", "EmployerOrDeductorOrCollecterName": "Acme Corp Pvt Ltd" },
+            "IncChrgSal": 1600000,
+            "TotalTDSSal": 200000
+          }
+        ],
+        "TotalTDSonSalaries": 200000
+      },
+      "ScheduleTDS2": {
+        "TDSOthThanSalaryDtls": [
+          {
+            "TDSCreditName": "OTHERS",
+            "TANOfDeductor": "MUMB00002B",
+            "TDSSection": "194A",
+            "GrossAmount": 30000,
+            "HeadOfIncome": "OS",
+            "TaxDeductCreditDtls": { "TaxDeductedTDS": 3000, "TaxClaimedTDS": 3000 }
+          }
+        ],
+        "TotalTDSonOthThanSals": 3000
+      },
+      "Verification": { "Declaration": { "AssesseeVerName": "Test Assessee", "FatherName": "Parent Assessee", "AssesseeVerPAN": "AAAAA1111A" }, "Capacity": "S" }
+    }
+  }
+}

@@ -1,0 +1,246 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  import-excel.yaml — Excel import wizard                                    ║
+# ║  Source: src/pages/Import.tsx + src/excel/*                                 ║
+# ║                                                                              ║
+# ║  Stages in the original UI:                                                 ║
+# ║    idle    → pick file                                                       ║
+# ║    review  → confirm/edit per-sheet plans (auto-detected pattern banner)    ║
+# ║    preview → read-only diff of rows + new-account count, then commit        ║
+# ║    done    → success/empty result + offer to import another                 ║
+# ║                                                                              ║
+# ║  Form-engine equivalents:                                                   ║
+# ║    page = stage                                                              ║
+# ║    review.sheets = repeating section over detected sheets                   ║
+# ║    preview = read-only display group bound to commitImport() output         ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_import_excel
+manifest_version: "1.0.0"
+description: Multi-sheet Excel import — column A = item, column B = value, sheet = month.
+
+forms:
+
+  import_excel:
+    title: Import Excel
+    description: >
+      Multi-sheet workbook. Sheet name = month, column A = item, column B =
+      value. The wizard auto-detects this and only asks questions when needed.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Internal
+    layout:
+      type: wizard
+      progress: bar
+    state:
+      persistence: in-memory
+    submit_label: Commit import
+    on_submit:
+      type: local
+      handler_name: excel.commitImport
+      success_message: Import complete.
+      error_message: Could not commit the import.
+
+    pages:
+
+      # ── 1. idle: file picker ─────────────────────────────────────────────
+      - id: idle
+        title: Pick a file
+        sections:
+          - id: pick_file
+            fields:
+
+              - id: workbook
+                type: file
+                label: Excel workbook
+                required: true
+                accept: [".xlsx", ".xls", ".xlsm", ".csv", ".tsv"]
+                max_size_mb: 50
+                on_change:
+                  # Parse the workbook into per-sheet raw rows + detected plans.
+                  type: local
+                  handler_name: excel.detectWorkbook
+                  binds:
+                    sheets: $output.sheets
+                    plans: $output.plans
+                    warnings: $output.warnings
+                    pattern: $output.pattern
+                    all_clean: $output.allMatchDefault
+
+              - id: download_template_link
+                type: action
+                label: Download an example template
+                hint: Not sure of the layout?
+                action:
+                  type: local
+                  handler_name: excel.downloadTemplate
+
+        actions:
+          - { id: next, type: nav-next, label: Continue,
+              enabled_if: { field: workbook, op: is_not_empty } }
+
+      # ── 2. review: per-sheet plans ───────────────────────────────────────
+      - id: review
+        title: Review sheets
+        sections:
+
+          - id: detected_banner
+            condition: { field: $context.pattern, op: is_not_empty }
+            display: read-only
+            description:
+              computed: >
+                'Detected pattern from formulas in ' +
+                $context.pattern.matchingSheets.length + ' of ' +
+                $context.pattern.totalSheets + ' sheets. Data rows ' +
+                ($context.pattern.dataStartRow + 1) + '–' +
+                ($context.pattern.dataEndRow + 1) + ', value columns ' +
+                $context.pattern.valueCols.map(colIndexToLetters).join(', ')
+            fields:
+              - id: apply_pattern_to_all
+                type: action
+                label: Apply to all sheets
+                action:
+                  type: local
+                  handler_name: import.applyPatternToAll
+
+          - id: sheets
+            title: Sheets in workbook
+            repeat:
+              source: { ref: plans }
+              key: $item.sheetName
+            fields:
+
+              - id: include
+                type: boolean
+                label: { computed: "$item.sheetName" }
+                display_as: checkbox
+                default: true
+                width: full
+
+              - id: month
+                type: text
+                label: Month
+                widget: month-picker
+                default: { expression: "$item.month" }
+                width: quarter
+                condition: { field: include, op: is_true }
+                validation:
+                  pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+                  pattern_message: Month must be YYYY-MM
+
+              - id: header_row
+                type: number
+                label: Header row (1-based, 0 = none)
+                number_type: int
+                default: { expression: "$item.headerRow + 1" }
+                width: quarter
+                min: 0
+                condition: { field: include, op: is_true }
+
+              - id: item_col
+                type: number
+                label: "Item col (A=1)"
+                number_type: int
+                default: { expression: "$item.itemCol + 1" }
+                width: quarter
+                min: 1
+                condition: { field: include, op: is_true }
+
+              - id: value_cols
+                type: text
+                label: "Value column(s) (B=2)"
+                hint: comma-separated list (e.g. 2, 3)
+                default: { expression: "$item.valueCols.map(c => c + 1).join(', ')" }
+                width: quarter
+                condition: { field: include, op: is_true }
+
+              - id: multi_col_hint
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    fields.value_cols.split(/[,\s]+/).length > 1
+                      ? 'Rows with values in multiple columns will be imported as separate items, with the column header appended.'
+                      : null
+
+              - id: stop_on_total
+                type: boolean
+                label: Stop at a row labeled "Total"
+                display_as: checkbox
+                default: true
+                condition: { field: include, op: is_true }
+
+        actions:
+          - { id: back,    type: nav-prev, label: Cancel }
+          - { id: preview, type: nav-next, label: Preview rows,
+              on_action: { type: local, handler_name: excel.previewImport,
+                           binds: { previews: $output } } }
+
+      # ── 3. preview: read-only diff ───────────────────────────────────────
+      - id: preview
+        title: Preview rows
+        sections:
+
+          - id: preview_summary
+            display: read-only
+            description:
+              computed: >
+                fields.previews.length + ' sheet(s) · ' +
+                fields.previews.reduce((acc, p) => acc + p.rows.length, 0) + ' row(s) · ' +
+                fields.previews.reduce((acc, p) => acc + p.rows.filter(r => r.matchedAccountId == null).length, 0) +
+                ' new account(s) will be created'
+
+          - id: preview_sheets
+            repeat:
+              source: { ref: previews }
+              key: "$item.sheetName + $item.month"
+            display: read-only
+            description:
+              computed: "$item.sheetName + ' → ' + formatMonthLabel($item.month)"
+            fields:
+              - id: row_table
+                type: hidden
+                source: computed
+                value:
+                  expression: "$item.rows.slice(0, 50)"   # table of {item, value, matchedAccountId}
+
+        actions:
+          - { id: back,   type: nav-prev, label: Back }
+          - { id: commit, type: nav-next, label: Commit import,
+              enabled_if: { expression: "fields.previews.length > 0" },
+              on_action: { type: local, handler_name: excel.commitImport,
+                           payload: { previews: { ref: previews },
+                                      defaultCurrency: { context: currency } },
+                           binds: { done: $output } } }
+
+      # ── 4. done: result summary ──────────────────────────────────────────
+      - id: done
+        title:
+          computed: "fields.done.snapshotsWritten == 0 ? 'No rows imported' : 'Import complete'"
+        sections:
+
+          # Failure branch
+          - id: failure
+            condition: { expression: "fields.done.snapshotsWritten == 0" }
+            display: read-only
+            description: >
+              The wizard couldn't extract any (item, value) pairs from this
+              file. The fastest fix is to download the template, paste your
+              data into it, and re-upload.
+            fields:
+              - id: download_template
+                type: action
+                label: Download template
+                action: { type: local, handler_name: excel.downloadTemplate }
+
+          # Success branch
+          - id: success
+            condition: { expression: "fields.done.snapshotsWritten > 0" }
+            display: read-only
+            description:
+              computed: >
+                fields.done.snapshotsWritten + ' monthly snapshot(s) written · ' +
+                fields.done.accountsCreated + ' new account(s) created'
+
+        actions:
+          - { id: again, type: button, label: Import another file,
+              on_action: { type: nav, target: idle, reset: true } }

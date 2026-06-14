@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e40af"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#g)"/>
+  <g fill="#ffffff" font-family="-apple-system,system-ui,Segoe UI,Roboto,sans-serif" font-weight="700">
+    <text x="512" y="700" font-size="640" text-anchor="middle">₹</text>
+  </g>
+  <rect x="180" y="780" width="664" height="40" rx="20" fill="#ffffff" opacity="0.9"/>
+  <rect x="280" y="850" width="464" height="20" rx="10" fill="#ffffff" opacity="0.6"/>
+</svg>

@@ -1,0 +1,106 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  accounts.yaml — Account CRUD form                                          ║
+# ║  Source: src/components/accounts/AccountForm.tsx                            ║
+# ║          src/pages/Accounts.tsx (list + add/edit)                           ║
+# ║          src/pages/AccountDetail.tsx                                        ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_accounts
+manifest_version: "1.0.0"
+description: Bank accounts, cards, investments, loans.
+
+forms:
+
+  account_form:
+    title: Account
+    description: Create or edit an account.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Internal
+    layout:
+      type: single-page
+    submit_label: Save
+    draft_label: Cancel
+    on_submit:
+      type: local
+      handler_name: db.accounts.create_or_update    # createAccount / updateAccount
+      success_message: Account saved.
+      error_message: Could not save the account.
+
+    sections:
+
+      - id: account_basics
+        title: Account details
+        fields:
+
+          - id: name
+            type: text
+            label: Name
+            required: true
+            placeholder: "e.g. HDFC Savings"
+            width: half
+            validation:
+              min_length: 1
+              min_length_message: Name is required
+              max_length: 64
+
+          - id: type
+            type: select
+            label: Type
+            required: true
+            default: bank
+            width: half
+            display_as: drop-down
+            choices:
+              static:
+                - { value: bank,        label: Bank }
+                - { value: cash,        label: Cash }
+                - { value: credit,      label: Credit card }
+                - { value: investment,  label: Investment }
+                - { value: loan,        label: Loan }
+                - { value: other,       label: Other }
+
+          - id: institution
+            type: text
+            label: Institution
+            placeholder: "e.g. HDFC Bank"
+            width: half
+            hint: optional
+            validation:
+              max_length: 64
+
+          - id: opening_balance
+            type: number
+            label: Opening balance
+            required: true
+            number_type: decimal2
+            default: 0
+            width: half
+            prefix: { context: currency }   # shows selected currency code
+
+          # Currency is inherited from the user setting at create time and
+          # frozen per-account thereafter. Hidden but submitted.
+          - id: currency
+            type: hidden
+            label: Currency
+            source: context
+            value: currency
+            editability: IMMUTABLE_IF_NULL
+
+  # ── List/empty-state screen (read-only, but lives here for completeness) ───
+  accounts_list:
+    title: Accounts
+    description: Bank accounts, cards, investments, loans.
+    version: "1.0.0"
+    form_state: active
+    layout:
+      type: single-page
+    submit_button: { hidden: true }   # list view, no submit
+    sections:
+      - id: header_actions
+        fields:
+          - id: show_archived
+            type: boolean
+            label: Show archived
+            display_as: switch
+            default: false

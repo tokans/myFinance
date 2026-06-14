@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>myFinance</title>
+  </head>
+  <body class="bg-background text-foreground">
+    <!-- Boot fallback: shown until React mounts (and replaced by it). If the JS
+         bundle fails to evaluate or crashes before first paint, this stays visible
+         instead of a blank white screen, so a boot failure is never silent. -->
+    <div id="root">
+      <div style="display:flex;height:100vh;width:100%;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#64748b;">
+        <div style="text-align:center;">
+          <div style="font-size:1rem;font-weight:600;color:#0f172a;">myFinance</div>
+          <div style="margin-top:.5rem;font-size:.875rem;">Starting…</div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,86 @@
+{
+  "_comment": "SYNTHETIC ITR-4 (Sugam) sample for AY 2026-27. Structure mirrors the official ITR-4_AY26-27.json schema (note: income block is `IncomeDeductions`, NOT `ITR4_IncomeDeductions`; business income in `ScheduleBP`; taxes in `ScheduleIT`). All values fabricated. Not a real return.",
+  "ITR": {
+    "ITR4": {
+      "CreationInfo": {
+        "SWVersionNo": "1.0",
+        "SWCreatedBy": "SW00000000",
+        "JSONCreatedBy": "SW00000000",
+        "JSONCreationDate": "2026-06-01",
+        "IntermediaryCity": "Surat",
+        "Digest": "-"
+      },
+      "Form_ITR4": {
+        "FormName": "ITR4",
+        "Description": "For Individuals, HUFs and Firms (other than LLP) being a resident having total income upto Rs.50 lakh and having income from business and profession which is computed under sections 44AD, 44ADA or 44AE",
+        "AssessmentYear": "2026",
+        "SchemaVer": "Ver1.0",
+        "FormVer": "Ver1.0"
+      },
+      "PersonalInfo": {
+        "AssesseeName": { "FirstName": "Sugam", "SurNameOrOrgName": "Trader" },
+        "PAN": "CCCCC3333C",
+        "DOB": "1982-01-05",
+        "Status": "I"
+      },
+      "FilingStatus": {
+        "ReturnFileSec": 11,
+        "OptOutNewTaxRegime": "Y"
+      },
+      "IncomeDeductions": {
+        "IncomeFromBusinessProf": 700000,
+        "GrossSalary": 240000,
+        "IncomeFromSal": 240000,
+        "TotalIncomeChargeableUnHP": 0,
+        "IncomeOthSrc": 20000,
+        "GrossTotIncome": 960000,
+        "DeductUndChapVIA": {
+          "Section80C": 100000,
+          "Section80D": 22000,
+          "TotalChapVIADeductions": 122000
+        },
+        "TotalIncome": 838000
+      },
+      "ScheduleBP": {
+        "NatOfBus44AD": [{ "CodeAD": "09028", "TradeName1": "Retail Store" }],
+        "PersumptiveInc44AD": 700000,
+        "TotalTurnoverGrsRcptGSTIN": 8750000
+      },
+      "TaxComputation": {
+        "TotalTaxPayable": 78000,
+        "Rebate87A": 0,
+        "EducationCess": 3120,
+        "GrossTaxLiability": 81120,
+        "NetTaxLiability": 81120
+      },
+      "TaxPaid": {
+        "TaxesPaid": {
+          "AdvanceTax": 60000,
+          "TDS": 5000,
+          "SelfAssessmentTax": 16120,
+          "TotalTaxesPaid": 81120
+        },
+        "BalTaxPayable": 0
+      },
+      "Refund": { "RefundDue": 0 },
+      "TDSonOthThanSals": {
+        "TDSOthThanSalaryDtls": [
+          {
+            "EmployerOrDeductorOrCollectDetl": { "TAN": "SRTA00004A", "EmployerOrDeductorOrCollecterName": "Gamma Distributors" },
+            "TaxDeducted": 5000,
+            "GrossAmount": 50000
+          }
+        ],
+        "TotalTDSonOthThanSals": 5000
+      },
+      "ScheduleIT": {
+        "TaxPayment": [
+          { "BSRCode": "0240001", "DateDep": "2025-12-12", "SrlNoOfChaln": "00007", "Amt": 60000 },
+          { "BSRCode": "0240001", "DateDep": "2026-07-25", "SrlNoOfChaln": "00009", "Amt": 16120 }
+        ],
+        "TotalTaxPayments": 76120
+      },
+      "Verification": { "Declaration": { "AssesseeVerName": "Sugam Trader", "AssesseeVerPAN": "CCCCC3333C" }, "Capacity": "S" }
+    }
+  }
+}

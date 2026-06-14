@@ -1,0 +1,75 @@
+{
+  "_comment": "SYNTHETIC ITR-1 (Sahaj) sample for AY 2026-27. Structure mirrors the official ITR-1_AY26-27.json schema; all values fabricated for parser testing. Not a real return.",
+  "ITR": {
+    "ITR1": {
+      "CreationInfo": {
+        "SWVersionNo": "1.0",
+        "SWCreatedBy": "SW00000000",
+        "JSONCreatedBy": "SW00000000",
+        "JSONCreationDate": "2026-06-01",
+        "IntermediaryCity": "Pune",
+        "Digest": "-"
+      },
+      "Form_ITR1": {
+        "FormName": "ITR1",
+        "Description": "For Individuals having Income from Salaries, one house property, other sources (Interest etc.) and having total income upto Rs.50 lakh",
+        "AssessmentYear": "2026",
+        "SchemaVer": "Ver1.0",
+        "FormVer": "Ver1.0"
+      },
+      "PersonalInfo": {
+        "AssesseeName": { "FirstName": "Sahaj", "SurNameOrOrgName": "Filer" },
+        "PAN": "BBBBB2222B",
+        "DOB": "1990-08-20",
+        "Status": "I"
+      },
+      "FilingStatus": {
+        "ReturnFileSec": 11,
+        "OptOutNewTaxRegime": "N"
+      },
+      "ITR1_IncomeDeductions": {
+        "GrossSalary": 850000,
+        "NetSalary": 800000,
+        "IncomeFromSal": 800000,
+        "TotalIncomeChargeableUnHP": -20000,
+        "IncomeOthSrc": 15000,
+        "GrossTotIncome": 795000,
+        "DeductUndChapVIA": {
+          "Section80C": 150000,
+          "Section80CCDEmployeeOrSE": 40000,
+          "Section80D": 18000,
+          "Section80TTA": 5000,
+          "TotalChapVIADeductions": 213000
+        },
+        "TotalIncome": 582000,
+        "ExemptIncAgriOthUs10": 12000
+      },
+      "ITR1_TaxComputation": {
+        "TotalTaxPayable": 29900,
+        "Rebate87A": 0,
+        "EducationCess": 1196,
+        "GrossTaxLiability": 31096,
+        "NetTaxLiability": 31096
+      },
+      "TaxPaid": {
+        "TaxesPaid": {
+          "TDS": 31096,
+          "TotalTaxesPaid": 31096
+        },
+        "BalTaxPayable": 0
+      },
+      "Refund": { "RefundDue": 0 },
+      "TDSonSalaries": {
+        "TDSonSalary": [
+          {
+            "EmployerOrDeductorOrCollectDetl": { "TAN": "PNEA00003A", "EmployerOrDeductorOrCollecterName": "Beta Services LLP" },
+            "IncChrgSal": 850000,
+            "TotalTDSSal": 31096
+          }
+        ],
+        "TotalTDSonSalaries": 31096
+      },
+      "Verification": { "Declaration": { "AssesseeVerName": "Sahaj Filer", "AssesseeVerPAN": "BBBBB2222B" }, "Capacity": "S" }
+    }
+  }
+}

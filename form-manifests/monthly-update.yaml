@@ -1,0 +1,168 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  monthly-update.yaml — Monthly update wizard                                ║
+# ║  Source: src/pages/MonthlyUpdate.tsx                                        ║
+# ║                                                                              ║
+# ║  The original UI has three stages — setup → per-account loop → summary.     ║
+# ║  We model:                                                                   ║
+# ║    Page 1 (setup):  pick the target month.                                  ║
+# ║    Page 2 (loop):   one repeating section iterated over active accounts.    ║
+# ║    Page 3 (done):   read-only summary computed from answers.                ║
+# ║                                                                              ║
+# ║  The host injects `$context.active_accounts: Account[]`. Each iteration of  ║
+# ║  the repeating section creates one snapshot via db.snapshots.upsert.        ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_monthly_update
+manifest_version: "1.0.0"
+description: Walks the user through entering this month's value for each account.
+
+forms:
+
+  monthly_update:
+    title: Monthly update
+    description: >
+      Enter this month's value for each of your active accounts, one at a time.
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Internal
+    layout:
+      type: wizard
+      progress: bar
+    state:
+      persistence: in-memory   # progress is lost on navigation
+    submit_label: Finish
+    draft_label: Save & exit
+    on_submit:
+      type: local
+      handler_name: db.snapshots.bulk_upsert
+      success_message: All set.
+
+    pages:
+
+      # ── 1. Setup ──────────────────────────────────────────────────────────
+      - id: setup
+        title: Pick the month
+        sections:
+          - id: month_picker
+            fields:
+              - id: month
+                type: text
+                label: Month
+                required: true
+                widget: month-picker
+                default: { context: current_month }
+                hint: >
+                  Defaults to the current month. Entering the same month again
+                  overwrites prior values for that month.
+                validation:
+                  pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+                  pattern_message: Month must be YYYY-MM
+
+      # ── 2. Per-account loop ──────────────────────────────────────────────
+      # In the original code this is a single screen swapped per account.
+      # In form-engine we express it as a `repeating` section iterated over
+      # the active_accounts collection, so each iteration is one snapshot.
+      - id: per_account
+        title:
+          computed: "'Account ' + ($index + 1) + ' of ' + $context.active_accounts.length"
+        sections:
+          - id: account_entry
+            repeat:
+              source: { context: active_accounts }
+              # Each iteration binds: $item = Account, $index = number
+              key: $item.id
+              one_per_page: true                # walk one at a time
+            fields:
+
+              # Bound, read-only context — shown as the header chrome
+              - id: account_header
+                type: hidden
+                label: ""
+                source: computed
+                value:
+                  expression: "$item.name + ' · ' + $item.type"
+
+              - id: existing_in_month
+                type: hidden
+                label: ""
+                source: computed
+                # null when no snapshot exists yet for this account+month
+                value:
+                  expression: "db.snapshots.get($item.id, fields.month)?.value"
+
+              - id: last_entered
+                type: hidden
+                label: ""
+                source: computed
+                # Latest snapshot before this month
+                value:
+                  expression: "db.snapshots.latest($item.id)"
+
+              - id: value
+                type: number
+                label:
+                  computed: "'Value (' + $item.currency + ')'"
+                required: true
+                number_type: decimal2
+                autofocus: true
+                width: full
+                # Smart default: same as already-saved value > last entered value > empty
+                default:
+                  expression: >
+                    fields.existing_in_month ?? fields.last_entered?.value ?? null
+
+              - id: copy_last_button
+                type: action
+                label:
+                  computed: "'Same as last (' + formatMoney(fields.last_entered.value, $item.currency) + ')'"
+                action: { set: { field: value, to: { expression: "fields.last_entered.value" } } }
+                condition: { field: $item.last_entered, op: is_not_empty }
+
+              - id: note
+                type: text
+                label: Note
+                hint: optional
+                width: full
+                validation:
+                  max_length: 200
+
+            # Per-iteration actions surfaced as buttons on the page
+            actions:
+              - { id: back, type: nav-prev, label: Back, icon: arrow-left }
+              - { id: skip, type: skip,     label: Skip, icon: skip-forward }
+              - { id: save_next, type: nav-next, label: "Save & next", icon: arrow-right,
+                  on_action: { type: local, handler_name: db.snapshots.upsert,
+                               payload: { account_id: { expression: "$item.id" },
+                                          month: { ref: fields.month },
+                                          value: { ref: fields.value },
+                                          note: { ref: fields.note },
+                                          source: "manual" } } }
+
+      # ── 3. Summary ────────────────────────────────────────────────────────
+      - id: done
+        title: All done
+        description:
+          computed: >
+            formatMonthLabel(fields.month) + ' · ' +
+            computed.saved_count + ' saved · ' +
+            computed.skipped_count + ' skipped · ' +
+            computed.unvisited_count + ' unvisited'
+        sections:
+          - id: summary_list
+            display: read-only
+            fields:
+              - id: entries_summary
+                type: hidden
+                source: computed
+                value:
+                  expression: >
+                    $context.active_accounts.map(a => ({
+                      account: a.name,
+                      type: a.type,
+                      status: db.snapshots.get(a.id, fields.month) ? 'saved' : 'unvisited',
+                      value: db.snapshots.get(a.id, fields.month)?.value
+                    }))
+        actions:
+          - { id: another, type: button, label: Update another month,
+              on_action: { type: nav, target: setup } }
+          - { id: home, type: nav-link, label: Back to dashboard, target: "/" }

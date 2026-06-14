@@ -1,0 +1,73 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  snapshot.yaml — Monthly snapshot form                                      ║
+# ║  Source: src/components/snapshots/SnapshotForm.tsx                          ║
+# ║  Used embedded inside AccountDetail; the standalone wizard equivalent       ║
+# ║  is in monthly-update.yaml.                                                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+manifest_id: myfinance_snapshot
+manifest_version: "1.0.0"
+description: Add or edit a per-account, per-month snapshot value.
+
+forms:
+
+  snapshot_form:
+    title: Snapshot
+    version: "1.0.0"
+    form_state: active
+    confidentiality: Internal
+    layout:
+      type: single-page
+    submit_label: Save snapshot
+    draft_label: Cancel
+    on_submit:
+      type: local
+      handler_name: db.snapshots.upsert            # upsertSnapshot
+      success_message: Snapshot saved.
+
+    sections:
+
+      - id: snapshot_fields
+        fields:
+
+          - id: month
+            type: text
+            label: Month
+            required: true
+            placeholder: YYYY-MM
+            default: { context: current_month }
+            widget: month-picker
+            width: half
+            validation:
+              pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+              pattern_message: Month must be YYYY-MM
+
+          - id: value
+            type: number
+            label: Value
+            required: true
+            number_type: decimal2
+            width: half
+            prefix: { context: currency }
+
+          - id: note
+            type: text
+            label: Note
+            hint: optional
+            width: full
+            validation:
+              max_length: 200
+
+          # account_id is set by the embedding context — not user-facing.
+          - id: account_id
+            type: hidden
+            label: ""
+            source: context
+            value: account_id
+            editability: IMMUTABLE
+
+          - id: source
+            type: hidden
+            label: ""
+            source: default
+            value: manual

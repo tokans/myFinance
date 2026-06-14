@@ -1,0 +1,5 @@
+# Migration SQL is embedded byte-for-byte into the binary via include_str! and
+# checksummed by sqlx per install — line-ending drift between checkouts changes
+# the checksum and bricks existing databases ("previously applied but has been
+# modified"). Pin LF so every checkout (and therefore every build) is identical.
+*.sql text eol=lf
