@@ -299,20 +299,15 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # Pin the NDK that compiles the app's Rust to r27c — the same version the
-      # libsodium Docker image uses — so the toolchains agree.
-      - name: Set up Android NDK (r27c)
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-          add-to-path: false
-
-      - name: Export NDK env
-        shell: bash
+      # Install NDK r27c (= 27.2.12479018) via sdkmanager so it lands inside
+      # ANDROID_HOME/ndk/ — the location Tauri checks automatically.
+      # nttld/setup-ndk installs to a separate tool-cache path that Tauri
+      # doesn't discover even with NDK_HOME set.
+      - name: Set up Android NDK r27c
         run: |
-          echo "ANDROID_NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
-          echo "NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
       - name: Set up Rust (Android target)
         uses: dtolnay/rust-toolchain@stable
