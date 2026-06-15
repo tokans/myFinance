@@ -440,10 +440,27 @@ jobs:
       - name: Inject local-network sync plist keys
         run: npm run ios:plist
 
-      # Unsigned: no team/cert, so the export step is expected to fail — the job
-      # is continue-on-error and we still publish anything xcodebuild produced.
-      - name: Build iOS app (unsigned)
-        run: npx tauri ios build --target aarch64 --export-method debugging
+      # Step 1: compile the Rust static library for iOS (what tauri ios build does
+      # internally before invoking xcodebuild).
+      - name: Build Rust for iOS
+        run: cargo build --target aarch64-apple-ios --release --manifest-path src-tauri/Cargo.toml
+
+      # Step 2: call xcodebuild directly so we fully control signing flags.
+      # CODE_SIGNING_REQUIRED=NO + DEVELOPMENT_TEAM="" suppresses the
+      # "requires a development team" error without needing a cert or pbxproj patch.
+      - name: Archive iOS app (unsigned)
+        run: |
+          xcodebuild archive \
+            -workspace src-tauri/gen/apple/myfinance.xcworkspace \
+            -scheme myfinance_iOS \
+            -configuration release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath /tmp/myfinance-ios.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
 
       - name: Collect iOS bundles
         if: always()
@@ -451,7 +468,14 @@ jobs:
         run: |
           DEST="$GITHUB_WORKSPACE/dist-bundles"
           mkdir -p "$DEST"
-          find src-tauri/gen/apple -name '*.ipa' -exec cp {} "$DEST/" \; 2>/dev/null || true
+          if [ -d /tmp/myfinance-ios.xcarchive ]; then
+            echo "Archive found at /tmp/myfinance-ios.xcarchive"
+            zip -qr "$DEST/myfinance-ios-unsigned.xcarchive.zip" /tmp/myfinance-ios.xcarchive
+          else
+            echo "No archive at /tmp/myfinance-ios.xcarchive — scanning broadly:"
+            find /Users/runner ~/Library/Developer/Xcode \
+              -name '*.xcarchive' -maxdepth 8 2>/dev/null | head -10 || true
+          fi
           ls -la "$DEST" || true
 
       - name: Upload iOS bundles
