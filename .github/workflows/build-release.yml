@@ -451,7 +451,7 @@ jobs:
       - name: Archive iOS app (unsigned)
         run: |
           xcodebuild archive \
-            -workspace src-tauri/gen/apple/myfinance.xcworkspace \
+            -project src-tauri/gen/apple/myfinance.xcodeproj \
             -scheme myfinance_iOS \
             -configuration release \
             -sdk iphoneos \
