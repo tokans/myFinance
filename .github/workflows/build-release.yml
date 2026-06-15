@@ -268,6 +268,7 @@ jobs:
         working-directory: myFinance
     steps:
       - name: Free disk space
+        working-directory: /
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
             /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
