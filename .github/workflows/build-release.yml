@@ -273,9 +273,10 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc \
             /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
             /usr/share/swift /usr/local/.ghcup
-          # Wipe the pre-bundled Android SDK contents but keep the directory
-          # so setup-android (non-sudo) can still write to it.
+          # Wipe pre-bundled Android SDK and hand ownership to runner so
+          # setup-android (non-sudo) can recreate sdk/ inside it.
           sudo rm -rf /usr/local/lib/android/sdk
+          sudo chown runner /usr/local/lib/android
           df -h
 
       - name: Check out myFinance (this public repo)
