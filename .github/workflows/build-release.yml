@@ -459,10 +459,11 @@ jobs:
           echo "pbxproj patched"
 
       # tauri ios build handles the xcode-script env (server-addr stub etc.)
-      # that xcodebuild alone cannot replicate. No --export-method = archive
-      # only, no .ipa export (which requires a real cert).
+      # that xcodebuild alone cannot replicate. The export step always fails
+      # without a cert (exit 70) — that's expected; we collect the xcarchive
+      # that was produced by the successful archive step via `if: always()`.
       - name: Build iOS app (unsigned archive)
-        run: npx tauri ios build --target aarch64
+        run: npx tauri ios build --target aarch64 || true
 
       - name: Collect iOS bundles
         if: always()
@@ -522,11 +523,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          gh release create "$VERSION" \
-            --repo "$PUBLISH_REPO" \
-            --title "myFinance $VERSION" \
-            --generate-notes \
-            release-assets/*
+          if gh release view "$VERSION" --repo "$PUBLISH_REPO" > /dev/null 2>&1; then
+            echo "Release $VERSION already exists — uploading/replacing assets."
+            gh release upload "$VERSION" --repo "$PUBLISH_REPO" --clobber release-assets/*
+          else
+            gh release create "$VERSION" \
+              --repo "$PUBLISH_REPO" \
+              --title "myFinance $VERSION" \
+              --generate-notes \
+              release-assets/*
+          fi
 
       # -----------------------------------------------------------------------
       # Refresh README.md on this repo with customer-facing product details plus
