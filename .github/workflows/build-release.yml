@@ -440,27 +440,29 @@ jobs:
       - name: Inject local-network sync plist keys
         run: npm run ios:plist
 
-      # Step 1: compile the Rust static library for iOS (what tauri ios build does
-      # internally before invoking xcodebuild).
-      - name: Build Rust for iOS
-        run: cargo build --target aarch64-apple-ios --release --manifest-path src-tauri/Cargo.toml
-
-      # Step 2: call xcodebuild directly so we fully control signing flags.
-      # CODE_SIGNING_REQUIRED=NO + DEVELOPMENT_TEAM="" suppresses the
-      # "requires a development team" error without needing a cert or pbxproj patch.
-      - name: Archive iOS app (unsigned)
+      # Patch the generated pbxproj to disable signing before tauri ios build
+      # calls xcodebuild. Uses sed for simple substitutions (BSD-safe) and awk
+      # for the multi-line injection — avoids the YAML heredoc indentation trap.
+      - name: Disable code signing in generated Xcode project
         run: |
-          xcodebuild archive \
-            -project src-tauri/gen/apple/myfinance.xcodeproj \
-            -scheme myfinance_iOS \
-            -configuration release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -archivePath /tmp/myfinance-ios.xcarchive \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM=""
+          P="src-tauri/gen/apple/myfinance.xcodeproj/project.pbxproj"
+          sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' "$P"
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$P"
+          awk '/buildSettings = \{/ {
+            print
+            print "\t\t\t\tCODE_SIGN_IDENTITY = \"\";"
+            print "\t\t\t\tCODE_SIGNING_REQUIRED = NO;"
+            print "\t\t\t\tCODE_SIGNING_ALLOWED = NO;"
+            next
+          }
+          { print }' "$P" > /tmp/pbxproj_patched && mv /tmp/pbxproj_patched "$P"
+          echo "pbxproj patched"
+
+      # tauri ios build handles the xcode-script env (server-addr stub etc.)
+      # that xcodebuild alone cannot replicate. No --export-method = archive
+      # only, no .ipa export (which requires a real cert).
+      - name: Build iOS app (unsigned archive)
+        run: npx tauri ios build --target aarch64
 
       - name: Collect iOS bundles
         if: always()
@@ -468,13 +470,14 @@ jobs:
         run: |
           DEST="$GITHUB_WORKSPACE/dist-bundles"
           mkdir -p "$DEST"
-          if [ -d /tmp/myfinance-ios.xcarchive ]; then
-            echo "Archive found at /tmp/myfinance-ios.xcarchive"
-            zip -qr "$DEST/myfinance-ios-unsigned.xcarchive.zip" /tmp/myfinance-ios.xcarchive
+          ARCHIVE=$(find ~/Library/Developer/Xcode/Archives \
+            -name '*.xcarchive' -print -quit 2>/dev/null || true)
+          if [ -n "$ARCHIVE" ]; then
+            echo "Found: $ARCHIVE"
+            zip -qr "$DEST/myfinance-ios-unsigned.xcarchive.zip" "$ARCHIVE"
           else
-            echo "No archive at /tmp/myfinance-ios.xcarchive — scanning broadly:"
-            find /Users/runner ~/Library/Developer/Xcode \
-              -name '*.xcarchive' -maxdepth 8 2>/dev/null | head -10 || true
+            echo "No xcarchive in Archives — broader scan:"
+            find /Users/runner -name '*.xcarchive' -maxdepth 8 2>/dev/null | head -5 || true
           fi
           ls -la "$DEST" || true
 
