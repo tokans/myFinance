@@ -471,14 +471,17 @@ jobs:
         run: |
           DEST="$GITHUB_WORKSPACE/dist-bundles"
           mkdir -p "$DEST"
-          ARCHIVE=$(find ~/Library/Developer/Xcode/Archives \
-            -name '*.xcarchive' -print -quit 2>/dev/null || true)
+          # Search every likely location — tauri may pass a custom -archivePath
+          echo "=== xcarchive search ==="
+          find /Users/runner /var/folders /tmp \
+            -name '*.xcarchive' -maxdepth 10 2>/dev/null | head -20 || true
+          ARCHIVE=$(find /Users/runner /var/folders /tmp \
+            -name '*.xcarchive' -maxdepth 10 -print -quit 2>/dev/null || true)
           if [ -n "$ARCHIVE" ]; then
-            echo "Found: $ARCHIVE"
+            echo "Collecting: $ARCHIVE"
             zip -qr "$DEST/myfinance-ios-unsigned.xcarchive.zip" "$ARCHIVE"
           else
-            echo "No xcarchive in Archives — broader scan:"
-            find /Users/runner -name '*.xcarchive' -maxdepth 8 2>/dev/null | head -5 || true
+            echo "No xcarchive found anywhere."
           fi
           ls -la "$DEST" || true
 
