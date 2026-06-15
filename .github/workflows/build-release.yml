@@ -268,16 +268,15 @@ jobs:
         working-directory: myFinance
     steps:
       - name: Free disk space
-        working-directory: /
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc \
-            /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
-            /usr/share/swift /usr/local/.ghcup
-          # Wipe pre-bundled Android SDK and hand ownership to runner so
-          # setup-android (non-sudo) can recreate sdk/ inside it.
-          sudo rm -rf /usr/local/lib/android/sdk
-          sudo chown runner /usr/local/lib/android
-          df -h
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: false        # leave the Android SDK directory untouched
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Check out myFinance (this public repo)
         uses: actions/checkout@v4
@@ -299,15 +298,20 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # Install NDK r27c (= 27.2.12479018) via sdkmanager so it lands inside
-      # ANDROID_HOME/ndk/ — the location Tauri checks automatically.
-      # nttld/setup-ndk installs to a separate tool-cache path that Tauri
-      # doesn't discover even with NDK_HOME set.
-      - name: Set up Android NDK r27c
+      # Pin the NDK that compiles the app's Rust to r27c — the same version the
+      # libsodium Docker image uses — so the toolchains agree.
+      - name: Set up Android NDK (r27c)
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          add-to-path: false
+
+      - name: Export NDK env
+        shell: bash
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
 
       - name: Set up Rust (Android target)
         uses: dtolnay/rust-toolchain@stable
