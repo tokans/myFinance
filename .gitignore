@@ -36,3 +36,6 @@ dist-masters/
 
 # patron donation files (generated; may carry per-donor data)
 dist-patron/
+
+# Dev-only Tauri config overlay (per-app free dev port, written by sync-dev-port.mjs)
+src-tauri/.dev.conf.json

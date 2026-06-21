@@ -1,14 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { backupVite } from "sharedcorelib/vite";
+import { devServer } from "sharedcorelib/vite/dev-server";
 import path from "node:path";
 
 const host = process.env.TAURI_DEV_HOST;
 
+// Node polyfills + aliases for the OPTIONAL Excel backup-password path (officecrypto-tool
+// is Node-targeted; the Tauri webview has no Buffer/crypto/stream). Centralized in core so
+// every suite app shares one fix — see sharedcorelib `vite/backup-polyfills.mjs`.
+const backup = backupVite();
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), ...backup.plugins],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      ...backup.alias,
     },
     // `sharedcorelib` is consumed via a `file:../` symlink and declares React (and
     // the other context-singleton libs) as peerDependencies — but it ALSO carries
@@ -25,13 +33,7 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
-    port: 1420,
-    strictPort: true,
-    host: host || false,
-    hmr: host
-      ? { protocol: "ws", host, port: 1421 }
-      : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
+    ...devServer({ host }),
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
@@ -47,11 +49,15 @@ export default defineConfig({
         : "safari15",
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: backup.chunkSizeWarningLimit,
     rolldownOptions: {
       output: {
         manualChunks(id: string) {
           if (!id.includes("node_modules")) return;
+          // Keep the lazy backup-password subtree (officecrypto + Node polyfills) OFF the
+          // eager catch-all `vendor` below — let rolldown default-split it onto its own
+          // async chunk so ~700 KB of crypto polyfill never hits first paint.
+          if (backup.isBackupModule(id)) return;
           if (
             /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(
               id,

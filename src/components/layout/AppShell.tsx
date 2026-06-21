@@ -10,13 +10,10 @@ import {
   LifeBuoy,
   ShieldAlert,
   Settings as SettingsIcon,
-  Heart,
-  Handshake,
-  RotateCw,
   Bug,
   LayoutGrid,
 } from "lucide-react";
-import { SuiteShell, type SuiteNavItem, type SuiteAction } from "sharedcorelib/ui";
+import { SuiteShell, type SuiteNavItem, type SuiteAction, type SuiteSupport } from "sharedcorelib/ui";
 import { openExternal } from "@/lib/openExternal";
 import { ReportIssueDialog } from "@/components/feedback/ReportIssueDialog";
 import { DonateDialog } from "@/components/feedback/DonateDialog";
@@ -86,22 +83,22 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate]);
 
-  // The single Patron/Partner call-to-action, resolved from donation state.
-  const patronCta = ((): { label: string; icon: typeof Heart; onClick: () => void } => {
-    if (!patron.isPatron && patron.pending) {
-      return { label: "Restart after Donation", icon: RotateCw, onClick: () => void scanForGrants() };
-    }
-    if (patron.isPatron && patron.partnerOfferActive) {
-      return { label: "Become a Partner", icon: Handshake, onClick: () => void openPartnerSignup() };
-    }
-    if (patron.isPatron) {
-      // Patron, but the 3-month Partner window has closed — re-offer via re-donation.
-      return { label: "Reopen Partner signup", icon: Handshake, onClick: () => setDonateOpen(true) };
-    }
-    return { label: "Become a Patron", icon: Heart, onClick: () => setDonateOpen(true) };
-  })();
-  // Hide the Patron/Partner CTA until the user reaches the 2nd earned tier (Regular).
-  const showPatronCta = patron.isPatron || patron.pending || becomePatronVisible(tierCtx);
+  // The Patron/Partner CTA is now resolved + rendered by SuiteShell (the donate→partner flip + the
+  // pending / offer-closed states live in core, shared with every app). myFinance supplies only its
+  // donation state, the openers, and its "Patron" terminology; it stays hidden until the 2nd earned
+  // tier (Regular) for a not-yet-patron.
+  const support: SuiteSupport = {
+    isSupporter: patron.isPatron,
+    isPartner: patron.isPartner,
+    pending: patron.pending,
+    partnerOfferActive: patron.partnerOfferActive,
+    hidden: !(patron.isPatron || patron.pending || becomePatronVisible(tierCtx)),
+    onDonate: () => setDonateOpen(true),
+    onPartner: () => void openPartnerSignup(),
+    onReopen: () => setDonateOpen(true),
+    onRestart: () => void scanForGrants(),
+    labels: { donate: "Become a Patron", restart: "Restart after Donation" },
+  };
 
   const isLocked = (item: NavDef) =>
     item.feature != null && !FEATURE_GATES[item.feature].isUnlocked(gating);
@@ -142,9 +139,6 @@ export function AppShell() {
   // and "Report an issue" used to be SuiteShell chrome props (moreAppsTo/onReportIssue);
   // the K0 SuiteShell API dropped those, so they are now explicit actions (mirrors myHealth).
   const actions: SuiteAction[] = [
-    ...(showPatronCta
-      ? [{ key: "patron", label: patronCta.label, icon: patronCta.icon, onSelect: patronCta.onClick, tone: "primary" as const }]
-      : []),
     { key: "emergency", label: "Press during Emergency", icon: LifeBuoy, onSelect: () => setEmergencyOpen(true), tone: "danger" },
     { key: "more-apps", label: "More Apps", icon: LayoutGrid, to: "/suite" },
     { key: "report", label: "Report an issue", icon: Bug, onSelect: () => setReportOpen(true) },
@@ -163,6 +157,7 @@ export function AppShell() {
         centralActions={centralActions}
         centralLabel="Menu"
         actions={actions}
+        support={support}
         userSwitch={userSwitch}
         sidebarTop={<p className="-mt-2 px-4 pb-1 text-xs text-muted-foreground">Personal · Offline</p>}
         onExternal={(href) => void openExternal(href)}

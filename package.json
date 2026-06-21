@@ -1,11 +1,13 @@
 {
   "name": "myfinance",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "node node_modules/sharedcorelib/vite/sync-dev-port.mjs",
+    "pretauri:dev": "node node_modules/sharedcorelib/vite/sync-dev-port.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "deploy": "claude \"/deploy-release\"",
@@ -15,7 +17,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
+    "tauri:dev": "tauri dev --config src-tauri/.dev.conf.json",
     "tauri:build": "tauri build",
     "tauri:android:init": "tauri android init",
     "tauri:android:dev": "tauri android dev",

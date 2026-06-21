@@ -356,6 +356,13 @@ jobs:
       - name: Initialize the Android project
         run: npx tauri android init
 
+      # `tauri android init` lays down the DEFAULT Tauri launcher icons. Regenerate
+      # the Android mipmaps from the app's real icon so the APK shows the correct
+      # per-app logo instead of the generic Tauri diamond (gen/android is gitignored,
+      # so the committed src-tauri/icons/android/ set is never picked up otherwise).
+      - name: Generate Android launcher icons from the app icon
+        run: npx tauri icon src-tauri/icons/icon.png
+
       # SODIUM_LIB_DIR makes libsodium-sys-stable link our prebuilt .a instead of
       # autotools-building from source. It's a single dir, hence one ABI (arm64).
       - name: Build Android APK (debug) + AAB (release, unsigned)
@@ -447,6 +454,11 @@ jobs:
       # inject the LAN-sync Info.plist keys the app needs.
       - name: Initialize the iOS project
         run: npx tauri ios init
+
+      # `tauri ios init` lays down the DEFAULT Tauri app icons. Regenerate the iOS
+      # AppIcon set from the app's real icon so the build shows the correct logo.
+      - name: Generate iOS app icons from the app icon
+        run: npx tauri icon src-tauri/icons/icon.png
 
       - name: Inject local-network sync plist keys
         run: npm run ios:plist
