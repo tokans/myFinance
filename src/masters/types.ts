@@ -27,7 +27,8 @@ export type MasterId =
   | "institution"
   | "life_goal"
   | "relationship"
-  | "professional_type";
+  | "professional_type"
+  | "transaction_category";
 
 export interface MasterDef {
   id: MasterId;

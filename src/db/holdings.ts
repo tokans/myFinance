@@ -39,9 +39,13 @@ export async function listHoldings(): Promise<Holding[]> {
 }
 
 export async function listHoldingsWithPeople(): Promise<HoldingWithPerson[]> {
+  // person name/relationship come from the shared spine (common_person), joined via the thin
+  // myfinance_people link's person_key — the integer person_id FK is unchanged.
   return query<HoldingWithPerson>(
-    `SELECT h.*, p.name AS person_name, p.relationship AS relationship
-       FROM ${T.holdings} h JOIN ${T.people} p ON p.id = h.person_id
+    `SELECT h.*, pr.display_name AS person_name, pr.relationship_to_self AS relationship
+       FROM ${T.holdings} h
+       JOIN ${T.people} p ON p.id = h.person_id
+       JOIN common_person pr ON pr.person_key = p.person_key
       ORDER BY h.account_id, h.position, h.id`,
   );
 }

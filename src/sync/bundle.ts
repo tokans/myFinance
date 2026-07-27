@@ -20,7 +20,7 @@ import type { SyncDb } from "./merge";
 // behave exactly as pre-K4, so this is inert for single-user.
 import { rowsForRecipient } from "sharedcorelib/multiuser";
 
-const PARENTS: ParentTable[] = ["vault_entries", "accounts", "people", "documents"];
+const PARENTS: ParentTable[] = ["vault_entries", "accounts", "people", "documents", "transactions"];
 
 export interface BuildOptions {
   deviceId: string;

@@ -24,7 +24,7 @@
 import { T } from "@/db/tables";
 
 /** Parent tables other rows point at; each gets a sync_id↔localId map at merge time. */
-export type ParentTable = "vault_entries" | "accounts" | "people" | "documents";
+export type ParentTable = "vault_entries" | "accounts" | "people" | "documents" | "transactions";
 
 /**
  * Physical (suite.db) table name for each LOGICAL sync name. Post-consolidation the
@@ -35,6 +35,7 @@ export type ParentTable = "vault_entries" | "accounts" | "people" | "documents";
 export const PHYSICAL: Record<string, string> = {
   vault_entries: T.vaultEntries,
   accounts: T.accounts,
+  transactions: T.transactions,
   people: T.people,
   documents: T.documents,
   goals: T.goals,
@@ -53,6 +54,10 @@ export const PHYSICAL: Record<string, string> = {
   tax_payments: T.taxPayments,
   tax_assessment: T.taxAssessment,
   tax_wizard_answers: T.taxWizardAnswers,
+  ais_sft: T.aisSft,
+  tax_refunds: T.taxRefunds,
+  category_rules: T.categoryRules,
+  transaction_tags: T.transactionTags,
 };
 
 /** Physical name for a logical sync table name (throws on an unmapped name). */
@@ -112,12 +117,31 @@ export const SPEC: TableSpec[] = [
     isParent: "accounts",
   },
   {
-    table: "people",
+    // Desktop-only feature. `matched_transaction_id`/`match_status` are deliberately
+    // excluded here: it's a self-referencing FK (self-transfer counterpart), a real
+    // cycle the single-pass merge engine can't safely resolve — match state stays
+    // device-local, each device recomputes/reviews its own reconciliation candidates.
+    // `category`/`category_source` are LEGACY (superseded by transaction_tags below,
+    // which categorization now lives on) — no longer synced, only ever stale NULLs
+    // going forward. `isParent` lets transaction_tags remap FK by this row's sync_id.
+    table: "transactions",
     pk: "id",
     columns: [
-      "sync_id", "name", "relationship", "phone", "email", "id_proof_ref",
-      "access_tier", "notes", "created_at", "updated_at",
+      "sync_id", "account_id", "date", "raw_date", "description", "debit", "credit",
+      "balance", "source_path", "created_at", "updated_at",
     ],
+    identity: { kind: "uuid" },
+    fks: [{ col: "account_id", parent: "accounts", required: true }],
+    isParent: "transactions",
+  },
+  {
+    // THIN spine link (finding 2.1, invariant 6): identity lives on common_person and the
+    // finance estate fields on myfinance_person_facet — both keyed by person_key and synced
+    // via the core shared-entity path, NOT here (same precedent as the health card, above).
+    // Only the link row (id ↔ person_key) travels so the estate FK remap keeps working.
+    table: "people",
+    pk: "id",
+    columns: ["sync_id", "person_key", "created_at", "updated_at"],
     identity: { kind: "uuid" },
     fks: [],
     isParent: "people",
@@ -159,6 +183,16 @@ export const SPEC: TableSpec[] = [
     pk: "id",
     columns: ["category", "value", "label", "parent", "created_at", "updated_at"],
     identity: { kind: "natural", cols: ["category", "parent", "value"] },
+    fks: [],
+  },
+  {
+    // Learned classifier memory (db/categoryRules.ts) — natural-keyed on the
+    // (pattern, category) pair so two devices teaching the same merchant
+    // converge on one row rather than duplicate it, same reasoning as custom_options.
+    table: "category_rules",
+    pk: "id",
+    columns: ["pattern", "category", "hit_count", "created_at", "updated_at"],
+    identity: { kind: "natural", cols: ["pattern", "category"] },
     fks: [],
   },
   {
@@ -257,7 +291,10 @@ export const SPEC: TableSpec[] = [
   {
     table: "tax_income",
     pk: "id",
-    columns: ["sync_id", "ay", "head", "label", "amount", "source_path", "note", "updated_at"],
+    // `excluded` is set by the reconciliation screen when the user
+    // confirms this row duplicates another source document's row for the
+    // same real-world event — a plain content field, syncs normally.
+    columns: ["sync_id", "ay", "head", "label", "amount", "source_path", "note", "excluded", "updated_at"],
     identity: { kind: "uuid" },
     fks: [],
   },
@@ -271,7 +308,7 @@ export const SPEC: TableSpec[] = [
   {
     table: "tax_payments",
     pk: "id",
-    columns: ["sync_id", "ay", "type", "payer_name", "amount", "source_path", "note", "updated_at"],
+    columns: ["sync_id", "ay", "type", "payer_name", "amount", "source_path", "note", "excluded", "updated_at"],
     identity: { kind: "uuid" },
     fks: [],
   },
@@ -293,6 +330,35 @@ export const SPEC: TableSpec[] = [
     identity: { kind: "natural", cols: ["ay"] },
     fks: [],
   },
+  {
+    table: "ais_sft",
+    pk: "id",
+    columns: ["sync_id", "ay", "sft_code", "description", "reporting_entity", "amount", "date", "updated_at"],
+    identity: { kind: "uuid" },
+    fks: [],
+  },
+  {
+    table: "tax_refunds",
+    pk: "id",
+    columns: ["sync_id", "ay", "amount", "mode", "refund_date", "source_path", "note", "updated_at"],
+    identity: { kind: "uuid" },
+    fks: [],
+  },
+  {
+    // Replaces the old single category/category_source columns on transactions —
+    // a transaction can carry multiple tags. Ordinary FK-to-parent shape (not the
+    // polymorphic/self-referencing case recon_links/matched_transaction_id avoid).
+    table: "transaction_tags",
+    pk: "id",
+    columns: ["sync_id", "transaction_id", "category", "source", "created_at", "updated_at"],
+    identity: { kind: "uuid" },
+    fks: [{ col: "transaction_id", parent: "transactions", required: true }],
+  },
+  // recon_links is deliberately NOT listed here — see its schema doc comment
+  // in legacySchemas.ts/auxSql.ts: a_kind/a_id/b_kind/b_id is a polymorphic
+  // local-id reference the single-pass sync merge engine can't safely remap
+  // across devices, same reasoning transactions.matched_transaction_id is
+  // device-local for. Each device recomputes its own recon candidates.
 ];
 
 /** A bundle row is a flat column→value map (FK columns hold the parent's sync_id). */

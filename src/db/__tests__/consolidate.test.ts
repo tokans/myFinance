@@ -169,11 +169,19 @@ describe("consolidateLegacyDb", () => {
     expect(h.removeLegacy).toHaveBeenCalledTimes(1);
 
     // Content equality, table by table (full rows incl. unicode/NULLs/integer ids).
+    // Compared over the LEGACY row's own columns only — a suite-only column added
+    // to a descriptor after the legacy schema was frozen (e.g. accounts.customer_id,
+    // which has no counterpart in the retired 0001..0023 migrations) legitimately
+    // appears on the suite side as NULL and isn't part of "copied verbatim".
     for (const spec of LEGACY_TABLES) {
       const order = spec.keyColumns.join(", ");
-      const before = await h.legacy.db.select(`SELECT * FROM ${spec.legacy} ORDER BY ${order}`);
-      const after = await h.suite.db.select(`SELECT * FROM ${spec.suite} ORDER BY ${order}`);
-      expect(after, spec.legacy).toEqual(before);
+      const before = await h.legacy.db.select<Record<string, unknown>>(`SELECT * FROM ${spec.legacy} ORDER BY ${order}`);
+      const after = await h.suite.db.select<Record<string, unknown>>(`SELECT * FROM ${spec.suite} ORDER BY ${order}`);
+      const afterProjected = after.map((row, i) => {
+        const keys = Object.keys(before[i] ?? {});
+        return Object.fromEntries(keys.map((k) => [k, row[k]]));
+      });
+      expect(afterProjected, spec.legacy).toEqual(before);
     }
 
     // Integer FK fidelity: the copied document still joins to its account/person by id.

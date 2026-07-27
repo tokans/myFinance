@@ -3,9 +3,12 @@ import { Link } from "react-router-dom";
 import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { FileText, Upload, Sparkles, AlertCircle, Trash2, Globe, Settings as SettingsIcon } from "lucide-react";
+import { FileText, FileDown, Upload, Sparkles, AlertCircle, Trash2, Globe, Settings as SettingsIcon, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { isTauri } from "@/lib/environment";
 import { useSettingsStore } from "@/stores/settings.store";
 import { compactCurrency, formatMoney } from "@/lib/format";
@@ -14,6 +17,7 @@ import {
   type TaxAssessment, type TaxYear,
 } from "@/db/tax";
 import { DangerZone } from "@/components/common/DangerZone";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const DEFAULT_AY = "2026-27";
 
@@ -77,28 +81,69 @@ export function TaxPage() {
 
   return (
     <div className="container max-w-4xl py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Income tax</h2>
-          <p className="text-sm text-muted-foreground">
-            Track annual income, deductions and TDS per assessment year. Import old ITR JSON or build from scratch.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" disabled={!isTauri()}>
-            <Link to={`/tax/wizard?ay=${DEFAULT_AY}${isNonIndia ? "&nri=1" : ""}`}>
-              <Sparkles className="h-4 w-4" /> {isNonIndia ? "Which NRI form?" : "Which ITR applies?"}
-            </Link>
-          </Button>
-          {!isNonIndia && (
-            <Button asChild disabled={!isTauri()}>
-              <Link to="/tax/import">
-                <Upload className="h-4 w-4" /> Import ITR JSON
+      <PageHeader
+        title="Income tax"
+        description="Track annual income, deductions and TDS per assessment year. Import old ITR JSON or build from scratch."
+        actions={
+          <>
+            <Button asChild variant="outline" disabled={!isTauri()}>
+              <Link to={`/tax/wizard?ay=${DEFAULT_AY}${isNonIndia ? "&nri=1" : ""}`}>
+                <Sparkles className="h-4 w-4" /> {isNonIndia ? "Which NRI form?" : "Which ITR applies?"}
               </Link>
             </Button>
-          )}
-        </div>
-      </header>
+            {!isNonIndia && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={!isTauri()}>
+                    <FileText className="h-4 w-4" /> Import documents <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Bulk import</DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/folder-import">From a folder</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Bank &amp; statements</DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link to="/import/statement-pdf">Bank statement</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Tax documents</DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/ais">AIS/TIS (AIS Utility JSON)</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/ais-pdf">AIS (PDF)</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/tis-pdf">TIS (PDF)</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/26as">Form 26AS</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/form16">Form 16</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/it-return">IT-Return document</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/capital-gains">Capital Gains Statement</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/ca-computation">CA Tax Calculation</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/tax/import">ITR JSON</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </>
+        }
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">
@@ -221,6 +266,13 @@ export function TaxPage() {
                         <span className="text-xs text-muted-foreground truncate">{y.imported_filename}</span>
                       )}
                       <div className="ml-auto flex items-center gap-2">
+                        {!isNonIndia && (
+                          <Button asChild size="sm" variant="outline">
+                            <Link to={`/tax/${encodeURIComponent(y.ay)}/return`}>
+                              <FileDown className="h-4 w-4" /> Prepare return
+                            </Link>
+                          </Button>
+                        )}
                         <Button asChild size="sm" variant="ghost">
                           <Link to={`/tax/${encodeURIComponent(y.ay)}`}>Open</Link>
                         </Button>

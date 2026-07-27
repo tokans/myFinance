@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { RefreshCw, Lock } from "lucide-react";
+import { RefreshCw, Lock, Eraser } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings.store";
 import { useGatingStore } from "@/stores/gating.store";
 import { FEATURE_GATES } from "@/lib/featureGate";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FiniteSetInput } from "@/components/forms/FiniteSetInput";
 import { UnlockPanel } from "@/components/vault/UnlockPanel";
 import { DangerZone } from "@/components/common/DangerZone";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { isTauri } from "@/lib/environment";
 import { currencyForCountry } from "@/lib/countryCurrency";
 import { clearAllData, countAllData } from "@/db/maintenance";
@@ -31,6 +32,27 @@ export function SettingsPage() {
   const refreshGating = useGatingStore((s) => s.refresh);
   const [dataCount, setDataCount] = useState(0);
   const [backup, setBackup] = useState<ExcelBackup | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+  const [cacheError, setCacheError] = useState<string | null>(null);
+
+  /** Clears the webview's own cached scripts/styles/images (WebView2 on
+   *  Windows persists this to disk independently of the app process, so a
+   *  plain restart doesn't clear it) and reloads. Never touches the SQLite
+   *  DB, settings, or vault — those live in separate files entirely. Mainly
+   *  a troubleshooting escape hatch for "the app seems to be behaving like
+   *  an older build than what's actually installed". */
+  const clearAppCache = async () => {
+    setClearingCache(true);
+    setCacheError(null);
+    try {
+      const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+      await getCurrentWebview().clearAllBrowsingData();
+      window.location.reload();
+    } catch (e) {
+      setCacheError(e instanceof Error ? e.message : String(e));
+      setClearingCache(false);
+    }
+  };
 
   const refreshDataCount = useCallback(async () => {
     if (!isTauri()) return;
@@ -51,10 +73,10 @@ export function SettingsPage() {
 
   return (
     <div className="container max-w-2xl py-6">
-      <header className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
-        <p className="text-sm text-muted-foreground">Defaults applied across the app.</p>
-      </header>
+      <PageHeader
+        title="Settings"
+        description="Defaults applied across the app."
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">
@@ -218,6 +240,25 @@ export function SettingsPage() {
           </h3>
           <UnlockPanel />
         </div>
+      )}
+
+      {isTauri() && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Troubleshooting</CardTitle>
+            <CardDescription>
+              Clears the app&apos;s cached scripts/styles/images and reloads — try this if the app seems
+              to be behaving like an older build than what&apos;s actually installed. Doesn&apos;t touch
+              your data, settings, or the credential vault, which live in separate files.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {cacheError && <p className="text-xs text-destructive">Couldn&apos;t clear cache: {cacheError}</p>}
+            <Button variant="outline" onClick={() => void clearAppCache()} disabled={clearingCache}>
+              <Eraser className="mr-2 h-4 w-4" /> {clearingCache ? "Clearing…" : "Clear app cache & reload"}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <DangerZone

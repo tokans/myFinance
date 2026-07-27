@@ -131,4 +131,17 @@ describe("members from the person spine", () => {
     expect(activeMemberClass([], "self")).toBe("owner");
     expect(activeMemberClass(membersFromPeople(people), "kid")).toBe("child_user");
   });
+
+  it("excludes plain estate contacts (mf-* spine rows with no member_class) from the switcher", () => {
+    // Finance contacts now single-source onto the spine (finding 2.1) with member_class=null;
+    // they are NOT switchable household members.
+    const withContacts: Person[] = [
+      { person_key: "self", display_name: "Me", member_class: "owner" },
+      { person_key: "spouse", display_name: "Spouse", member_class: "adult" },
+      { person_key: "mf-1", display_name: "Nominee Asha" },        // finance contact
+      { person_key: "mf-2", display_name: "Executor Bimal" },      // finance contact
+    ];
+    const members = membersFromPeople(withContacts);
+    expect(members.map((m) => m.key)).toEqual(["self", "spouse"]);
+  });
 });

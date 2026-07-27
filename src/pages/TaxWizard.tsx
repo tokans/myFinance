@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, CheckCircle2, Save, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isTauri } from "@/lib/environment";
@@ -125,14 +126,16 @@ export function TaxWizardPage() {
 
   return (
     <div className="container max-w-2xl py-6">
-      <header className="mb-4 flex items-center justify-between gap-3">
-        <Link to="/tax" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to tax
-        </Link>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          AY {ay} · {isReviewStep ? "Recommendation" : `Question ${step + 1} of ${total}`}
-        </span>
-      </header>
+      <PageHeader
+        backTo="/tax"
+        backLabel="Back to tax"
+        title={nri ? "Which NRI form?" : "Which ITR applies?"}
+        actions={
+          <span className="text-xs text-muted-foreground tabular-nums">
+            AY {ay} · {isReviewStep ? "Recommendation" : `Question ${step + 1} of ${total}`}
+          </span>
+        }
+      />
 
       <div className="mb-4 h-1 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${(Math.min(step, total) / total) * 100}%` }} />

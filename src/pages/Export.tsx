@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { isTauri } from "@/lib/environment";
 import { buildExportWorkbook, defaultFilename } from "@/excel/export";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export function ExportPage() {
   const [busy, setBusy] = useState(false);
@@ -49,12 +50,10 @@ export function ExportPage() {
 
   return (
     <div className="container max-w-2xl py-6">
-      <header className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Export Excel</h2>
-        <p className="text-sm text-muted-foreground">
-          One sheet per month (newest first), col A = account name, col B = value. Re-import without questions.
-        </p>
-      </header>
+      <PageHeader
+        title="Export Excel"
+        description="One sheet per month (newest first), col A = account name, col B = value. Re-import without questions."
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

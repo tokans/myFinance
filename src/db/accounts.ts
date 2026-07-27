@@ -32,6 +32,12 @@ export interface Account {
   sip_amount: number | null;
   /** 'YYYY-MM-DD' of the SIP occurrence last marked Done/Ignore; null until acted. */
   sip_last_done: string | null;
+  /** Bank customer/CIF ID — feeds the bank-statement password-guess patterns so it isn't retyped per import. */
+  customer_id: string | null;
+  /** Belongs to a family member rather than the primary user; grouped separately on the Dashboard. 0/1/null. */
+  is_family: number | null;
+  /** 'minor' | 'adult' | null — only meaningful when is_family is set. Minor's income can be clubbed into the primary filer's tax return. */
+  family_relation: "minor" | "adult" | null;
 }
 
 export interface AccountInput {
@@ -51,11 +57,28 @@ export interface AccountInput {
   sip_day?: number | null;
   /** Optional SIP installment amount; persisted only when type === 'mutual_funds'. */
   sip_amount?: number | null;
+  /** Bank customer/CIF ID. Optional. */
+  customer_id?: string | null;
+  /** Marks the account as belonging to a family member rather than the primary user. Optional. */
+  is_family?: boolean;
+  /** 'minor' | 'adult'; persisted only when is_family is true. Optional. */
+  family_relation?: "minor" | "adult" | null;
 }
 
 /** A maturity date is only kept for term products (FDs); cleared otherwise. */
 function maturityFor(input: AccountInput): string | null {
   return input.type === "fixed_deposit" ? input.maturity_date?.trim() || null : null;
+}
+
+/**
+ * Relationship is only kept while the account is flagged `is_family`; cleared
+ * otherwise. Defaults to "adult" when family is on but no relation was chosen —
+ * clubbing a minor's income into the primary filer's tax return must be an
+ * explicit opt-in, never a silent default.
+ */
+function familyRelationFor(input: AccountInput): "minor" | "adult" | null {
+  if (!input.is_family) return null;
+  return input.family_relation === "minor" ? "minor" : "adult";
 }
 
 /** SIP day is only kept for mutual funds; cleared otherwise. Validated to 1..31, else null. */
@@ -85,8 +108,8 @@ export async function getAccount(id: number): Promise<Account | null> {
 export async function createAccount(input: AccountInput): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO ${T.accounts} (name, type, institution, currency, opening_balance, type_note, maturity_date, contact, emergency_action, sip_day, sip_amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ${T.accounts} (name, type, institution, currency, opening_balance, type_note, maturity_date, contact, emergency_action, sip_day, sip_amount, customer_id, is_family, family_relation)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.name.trim(),
       input.type,
@@ -99,6 +122,9 @@ export async function createAccount(input: AccountInput): Promise<number> {
       input.emergency_action?.trim() || null,
       sipDayFor(input),
       sipAmountFor(input),
+      input.customer_id?.trim() || null,
+      input.is_family ? 1 : 0,
+      familyRelationFor(input),
     ],
   );
   return Number(result.lastInsertId);
@@ -109,7 +135,7 @@ export async function updateAccount(id: number, input: AccountInput): Promise<vo
   await exec(
     `UPDATE ${T.accounts}
        SET name = ?, type = ?, institution = ?, currency = ?, opening_balance = ?, type_note = ?, maturity_date = ?,
-           contact = ?, emergency_action = ?, sip_day = ?, sip_amount = ?,
+           contact = ?, emergency_action = ?, sip_day = ?, sip_amount = ?, customer_id = ?, is_family = ?, family_relation = ?,
            -- Keep the cycle marker while a SIP is configured; clear it when the SIP is removed.
            sip_last_done = CASE WHEN ? IS NULL THEN NULL ELSE sip_last_done END
      WHERE id = ?`,
@@ -125,6 +151,9 @@ export async function updateAccount(id: number, input: AccountInput): Promise<vo
       input.emergency_action?.trim() || null,
       sipDay,
       sipAmountFor(input),
+      input.customer_id?.trim() || null,
+      input.is_family ? 1 : 0,
+      familyRelationFor(input),
       sipDay,
       id,
     ],
@@ -197,20 +226,27 @@ export async function setAccountInstitution(id: number, institution: string): Pr
   await exec(`UPDATE ${T.accounts} SET institution = ? WHERE id = ?`, [institution.trim() || null, id]);
 }
 
+/** Set just an account's customer ID (used by the bulk auto-detect on the Accounts page). */
+export async function setAccountCustomerId(id: number, customerId: string): Promise<void> {
+  await exec(`UPDATE ${T.accounts} SET customer_id = ? WHERE id = ?`, [customerId.trim() || null, id]);
+}
+
 /**
- * Permanently delete an account and its dependent data: monthly snapshots cascade
- * away, linked reminders are removed, and the credential's `vault_entries` row is
- * dropped so it isn't orphaned (the Stronghold secret itself is best-effort
- * removed by the caller while the vault is unlocked — see AccountDetail). Documents
- * are deliberately *not* deleted: their `account_id` FK is ON DELETE SET NULL, so
- * they survive (managed on the Documents page) with the link cleared.
+ * Permanently delete an account and its dependent data: monthly snapshots and
+ * transactions cascade away, linked reminders are removed, and the credential's
+ * `vault_entries` row is dropped so it isn't orphaned (the Stronghold secret
+ * itself is best-effort removed by the caller while the vault is unlocked — see
+ * AccountDetail). Documents are deliberately *not* deleted: their `account_id`
+ * FK is ON DELETE SET NULL, so they survive (managed on the Documents page)
+ * with the link cleared.
  *
- * Reminders/vault rows are deleted explicitly rather than via FK cascade so the
- * cleanup doesn't depend on the runtime foreign_keys pragma (mirrors maintenance.ts
- * and buildMergeSql).
+ * Reminders/vault/transaction rows are deleted explicitly rather than via FK
+ * cascade so the cleanup doesn't depend on the runtime foreign_keys pragma
+ * (mirrors maintenance.ts and buildMergeSql).
  */
 export async function deleteAccount(id: number): Promise<void> {
   await exec(`DELETE FROM ${T.reminders} WHERE account_id = ?`, [id]);
+  await exec(`DELETE FROM ${T.transactions} WHERE account_id = ?`, [id]);
   await exec(
     `DELETE FROM ${T.vaultEntries} WHERE id IN (SELECT credential_id FROM ${T.accounts} WHERE id = ? AND credential_id IS NOT NULL)`,
     [id],
@@ -279,6 +315,9 @@ export function buildMergeSql(
   return [
     "BEGIN;",
     moves,
+    // Reassign the merged-away accounts' transactions onto the survivor (unconditional —
+    // unlike snapshots, transactions carry no per-account uniqueness that could clash).
+    `UPDATE ${T.transactions} SET account_id = ${survivorId} WHERE account_id IN (${list});`,
     // Drop the merged-away accounts' credential pointers so vault_entries aren't orphaned.
     `DELETE FROM ${T.vaultEntries} WHERE id IN (SELECT credential_id FROM ${T.accounts} WHERE id IN (${list}) AND credential_id IS NOT NULL);`,
     // Drop reminders linked to the merged-away accounts (derived ones like fd:/sip:
@@ -335,6 +374,16 @@ export async function countAccountsWithEmergencyAction(): Promise<number> {
 /** Delete every account. Their monthly snapshots cascade away; goals are left intact. */
 export async function clearAllAccounts(): Promise<void> {
   await exec(`DELETE FROM ${T.accounts}`);
+}
+
+/**
+ * Detach every account's credential reference and drop the `vault_entries` rows.
+ * Used by vault reset ("forgot password") — once the Stronghold snapshot is
+ * wiped the referenced secrets are gone, so these rows would otherwise dangle.
+ */
+export async function clearAllCredentialRefs(): Promise<void> {
+  await exec(`UPDATE ${T.accounts} SET credential_id = NULL`);
+  await exec(`DELETE FROM ${T.vaultEntries}`);
 }
 
 export interface VaultEntryRef {

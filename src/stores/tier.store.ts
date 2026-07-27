@@ -13,6 +13,7 @@ import {
   type PatronState,
 } from "@/lib/patron";
 import { readPatronGrant, readPartnerGrant } from "@/lib/patronFile";
+import { localToday } from "sharedcorelib/reminders";
 import { EMPTY_TIER_CONTEXT, resolveTier, type Tier, type TierContext } from "@/lib/gamification";
 
 /**
@@ -40,15 +41,6 @@ interface TierState {
   markOpenedDonation: () => Promise<void>;
   /** Re-scan Downloads for Patron/Partner grant files; true if any was applied. */
   scanForGrants: () => Promise<boolean>;
-}
-
-/** Local 'YYYY-MM-DD' — the day boundary that matters for the Partner window. */
-function localToday(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 export const useTierStore = create<TierState>((set, get) => ({

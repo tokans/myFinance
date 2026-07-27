@@ -13,6 +13,7 @@ import { listAccounts, type Account } from "@/db/accounts";
 import { listSnapshotsForMonth, upsertSnapshot } from "@/db/snapshots";
 import { latestSnapshotPerAccount } from "@/db/aggregates";
 import { accountTypeLabel } from "@/lib/accountTypes";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 type Stage = "setup" | "wizard" | "done";
 
@@ -193,7 +194,7 @@ export function MonthlyUpdatePage() {
   if (!isTauri()) {
     return (
       <div className="container max-w-2xl py-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Monthly update</h2>
+        <PageHeader title="Monthly update" />
         <Card className="mt-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">
           <CardContent className="py-3 text-xs text-amber-900 dark:text-amber-200">
             Run in the desktop app to use the monthly update wizard.
@@ -210,7 +211,7 @@ export function MonthlyUpdatePage() {
   if (accounts.length === 0) {
     return (
       <div className="container max-w-2xl py-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Monthly update</h2>
+        <PageHeader title="Monthly update" />
         <Card className="mt-4">
           <CardContent className="space-y-3 py-8 text-center">
             <p className="text-sm">You don&apos;t have any active accounts yet.</p>
@@ -224,12 +225,10 @@ export function MonthlyUpdatePage() {
   if (stage === "setup") {
     return (
       <div className="container max-w-2xl py-6">
-        <header className="mb-6">
-          <h2 className="text-2xl font-semibold tracking-tight">Monthly update</h2>
-          <p className="text-sm text-muted-foreground">
-            Enter this month&apos;s value for each of your {accounts.length} active account{accounts.length === 1 ? "" : "s"}, one at a time.
-          </p>
-        </header>
+        <PageHeader
+          title="Monthly update"
+          description={`Enter this month's value for each of your ${accounts.length} active account${accounts.length === 1 ? "" : "s"}, one at a time.`}
+        />
 
         {error && (
           <Card className="mb-4 border-destructive/60">
@@ -268,14 +267,19 @@ export function MonthlyUpdatePage() {
   if (stage === "wizard" && acc) {
     return (
       <div className="container max-w-2xl py-6">
-        <header className="mb-4 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setStage("setup")} className="-ml-2">
-            <ChevronLeft className="h-4 w-4" /> Setup
-          </Button>
-          <div className="ml-auto text-xs text-muted-foreground tabular-nums">
-            Account {currentIdx + 1} of {accounts.length} · {formatMonthLabel(month)}
-          </div>
-        </header>
+        <PageHeader
+          title="Monthly update"
+          actions={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setStage("setup")}>
+                <ChevronLeft className="h-4 w-4" /> Setup
+              </Button>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                Account {currentIdx + 1} of {accounts.length} · {formatMonthLabel(month)}
+              </span>
+            </>
+          }
+        />
 
         <div className="mb-4 h-1 overflow-hidden rounded-full bg-muted">
           <div className="h-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
@@ -381,12 +385,10 @@ export function MonthlyUpdatePage() {
   // Done stage
   return (
     <div className="container max-w-2xl py-6">
-      <header className="mb-6">
-        <h2 data-testid="update-done" className="text-2xl font-semibold tracking-tight">All done</h2>
-        <p className="text-sm text-muted-foreground">
-          {formatMonthLabel(month)} · {stats.saved} saved · {stats.skipped} skipped · {accounts.length - stats.saved - stats.skipped} unvisited
-        </p>
-      </header>
+      <PageHeader
+        title={<span data-testid="update-done">All done</span>}
+        description={`${formatMonthLabel(month)} · ${stats.saved} saved · ${stats.skipped} skipped · ${accounts.length - stats.saved - stats.skipped} unvisited`}
+      />
 
       <Card>
         <CardContent className="p-0">

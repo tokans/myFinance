@@ -24,13 +24,24 @@ import {
 export function ReportIssueDialog({
   open,
   onOpenChange,
+  initialType,
+  initialTitle,
+  initialDescription,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Prefills the form when the dialog opens — e.g. the CA-computation
+   *  reconciliation gap report (`pages/CaComputationRecon.tsx`). Still fully
+   *  editable before submit, same as a blank report; every existing call
+   *  site (the shell's "Report an issue" menu action) omits these and keeps
+   *  today's blank-form behavior unchanged. */
+  initialType?: IssueType;
+  initialTitle?: string;
+  initialDescription?: string;
 }) {
-  const [type, setType] = useState<IssueType>("bug");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [type, setType] = useState<IssueType>(initialType ?? "bug");
+  const [title, setTitle] = useState(initialTitle ?? "");
+  const [description, setDescription] = useState(initialDescription ?? "");
   const [steps, setSteps] = useState("");
   const [includeContext, setIncludeContext] = useState(true);
   const [context, setContext] = useState("");
@@ -51,13 +62,15 @@ export function ReportIssueDialog({
   // Reset the form whenever the dialog is reopened.
   useEffect(() => {
     if (open) {
-      setType("bug");
-      setTitle("");
-      setDescription("");
+      setType(initialType ?? "bug");
+      setTitle(initialTitle ?? "");
+      setDescription(initialDescription ?? "");
       setSteps("");
       setIncludeContext(true);
       setBusy(false);
     }
+    // Intentionally keyed on `open` only — the initial* props are meant to
+    // seed the form fresh each time it opens, not resync while it's open.
   }, [open]);
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0;

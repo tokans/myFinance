@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import {
   LayoutDashboard,
@@ -12,15 +12,19 @@ import {
   Settings as SettingsIcon,
   Bug,
   LayoutGrid,
+  ArrowLeft,
 } from "lucide-react";
 import { SuiteShell, type SuiteNavItem, type SuiteAction, type SuiteSupport } from "sharedcorelib/ui";
+import { cn } from "@/lib/utils";
 import { openExternal } from "@/lib/openExternal";
 import { ReportIssueDialog } from "@/components/feedback/ReportIssueDialog";
 import { DonateDialog } from "@/components/feedback/DonateDialog";
+import { VaultUnlockDialog } from "@/components/vault/VaultUnlockDialog";
 import { EmergencyOverlay } from "@/components/emergency/EmergencyOverlay";
 import { useGatingStore } from "@/stores/gating.store";
 import { useTierStore } from "@/stores/tier.store";
 import { useMemberStore } from "@/stores/member.store";
+import { useTopBarStore } from "@/stores/topBar.store";
 import { becomePatronVisible } from "@/lib/gamification";
 import { openPartnerSignup } from "@/lib/donate";
 import { buildUserSwitch } from "@/lib/multiuser";
@@ -63,6 +67,10 @@ export function AppShell() {
   const currentMember = useMemberStore((s) => s.current);
   const setCurrentMember = useMemberStore((s) => s.setCurrent);
   const refreshMembers = useMemberStore((s) => s.refresh);
+  // Per-page heading + actions injected into the shell's top bar (see PageHeader + topBar.store).
+  const topBarCenter = useTopBarStore((s) => s.center);
+  // The current page's back destination (if any). On mobile it replaces the brand at top-left.
+  const topBarBack = useTopBarStore((s) => s.back);
 
   // Keep feature-lock indicators current: load on mount and re-check whenever the route changes.
   useEffect(() => { void refreshGating(); }, [refreshGating, location.pathname]);
@@ -148,9 +156,25 @@ export function AppShell() {
     <>
       <SuiteShell
         brand={
+          // The brand node renders in BOTH the desktop sidebar header and the mobile top
+          // bar. Using responsive visibility, the "myFinance" lockup shows on desktop
+          // always (sidebar) and on mobile only when the page has no back destination;
+          // when it does, a back arrow takes the top-left slot on mobile (native pattern).
           <>
-            <Wallet className="h-5 w-5 text-primary" />
-            myFinance
+            <span className={cn("items-center gap-2", topBarBack ? "hidden md:flex" : "flex")}>
+              <Wallet className="h-5 w-5 text-primary" />
+              myFinance
+            </span>
+            {topBarBack && (
+              <Link
+                to={topBarBack.to}
+                aria-label={topBarBack.label ?? "Back"}
+                title={topBarBack.label ?? "Back"}
+                className="-ml-1 flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent md:hidden"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            )}
           </>
         }
         nav={nav}
@@ -159,6 +183,8 @@ export function AppShell() {
         actions={actions}
         support={support}
         userSwitch={userSwitch}
+        topBarCenter={topBarCenter}
+        topBarCenterOnMobile
         sidebarTop={<p className="-mt-2 px-4 pb-1 text-xs text-muted-foreground">Personal · Offline</p>}
         onExternal={(href) => void openExternal(href)}
       >
@@ -179,6 +205,7 @@ export function AppShell() {
       <ReportIssueDialog open={reportOpen} onOpenChange={setReportOpen} />
       <DonateDialog open={donateOpen} onOpenChange={setDonateOpen} />
       <EmergencyOverlay open={emergencyOpen} onOpenChange={setEmergencyOpen} />
+      <VaultUnlockDialog />
     </>
   );
 }

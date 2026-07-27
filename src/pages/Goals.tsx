@@ -18,6 +18,7 @@ import { computeGoalProgress, type GoalProgress } from "@/domain/goals";
 import { lifeGoalByValue, spriteTileStyle } from "@/domain/lifeGoals";
 import { LifeGoalPicker, type TemplatePick } from "@/components/goals/LifeGoalPicker";
 import { useGatingStore } from "@/stores/gating.store";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Required").max(64),
@@ -137,22 +138,22 @@ export function GoalsPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Goals</h2>
-          <p className="text-sm text-muted-foreground">Set targets, track progress, see ETA.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isEmpty && (
-            <Button variant="outline" onClick={() => setGalleryOpen((v) => !v)} disabled={!isTauri()}>
-              <Sparkles className="h-4 w-4" /> Templates
+      <PageHeader
+        title="Goals"
+        description="Set targets, track progress, see ETA."
+        actions={
+          <>
+            {!isEmpty && (
+              <Button variant="outline" onClick={() => setGalleryOpen((v) => !v)} disabled={!isTauri()}>
+                <Sparkles className="h-4 w-4" /> Templates
+              </Button>
+            )}
+            <Button data-testid="goal-add-button" onClick={startBlank} disabled={!isTauri()}>
+              <Plus className="h-4 w-4" /> Add goal
             </Button>
-          )}
-          <Button data-testid="goal-add-button" onClick={startBlank} disabled={!isTauri()}>
-            <Plus className="h-4 w-4" /> Add goal
-          </Button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

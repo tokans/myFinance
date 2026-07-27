@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Users2, AlertTriangle, Plus, Trash2, Check } from "lucide-react";
-import { BackLink } from "@/components/layout/BackLink";
+import { AlertTriangle, Plus, Trash2, Check } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -69,16 +69,12 @@ export function NomineesPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <BackLink />
-      <header className="mb-4 flex items-start gap-3">
-        <div className="rounded-md bg-primary/10 p-2 text-primary"><Users2 className="h-6 w-6" /></div>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Nominees & beneficiaries</h2>
-          <p className="text-sm text-muted-foreground">
-            Nominees are custodians, not owners — gaps and mismatches cause real disputes.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        backTo="/estate"
+        backLabel="Back to Emergency Planning"
+        title="Nominees & beneficiaries"
+        description="Nominees are custodians, not owners — gaps and mismatches cause real disputes."
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

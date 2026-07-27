@@ -36,8 +36,12 @@ export function compactCurrency(value: number, currency: string): string {
   return `${currency} ${value.toFixed(0)}`;
 }
 
-/** Today as a local 'YYYY-MM-DD' string. */
-export function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Today as a local 'YYYY-MM-DD' string. Re-exported from the shared core (`sharedcorelib/reminders`). */
+export { localToday as todayISO } from "sharedcorelib/reminders";
+
+/** A transaction row's date for display: the parsed date, else the raw statement
+ *  text, else an explicit placeholder — never a blank string (a row whose date
+ *  column genuinely didn't parse would otherwise render nothing at all). */
+export function transactionDateLabel(t: { date: string | null; raw_date: string }): string {
+  return t.date ?? (t.raw_date.trim() || "Unknown date");
 }

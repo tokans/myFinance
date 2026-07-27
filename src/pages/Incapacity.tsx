@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ShieldHalf, Save, Info } from "lucide-react";
-import { BackLink } from "@/components/layout/BackLink";
+import { Save, Info } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -67,14 +67,12 @@ export function IncapacityPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <BackLink />
-      <header className="mb-4 flex items-start gap-3">
-        <div className="rounded-md bg-primary/10 p-2 text-primary"><ShieldHalf className="h-6 w-6" /></div>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Power of Attorney & incapacity</h2>
-          <p className="text-sm text-muted-foreground">PoA, living will / advance medical directive, and guidance.</p>
-        </div>
-      </header>
+      <PageHeader
+        backTo="/estate"
+        backLabel="Back to Emergency Planning"
+        title="Power of Attorney & incapacity"
+        description="PoA, living will / advance medical directive, and guidance."
+      />
 
       <Card className="mb-4 border-sky-300/60 bg-sky-50/40 dark:border-sky-800/40 dark:bg-sky-950/20">
         <CardContent className="flex items-start gap-2 py-3 text-xs leading-snug text-sky-900 dark:text-sky-200">

@@ -12,7 +12,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { useMaster } from "@/masters/store";
 import { MASTERS } from "@/masters/registry";
-import type { MasterId } from "@/masters/types";
+import type { MasterId, MasterOption } from "@/masters/types";
 
 const OTHER_SENTINEL = "__other__";
 
@@ -27,6 +27,11 @@ interface Props {
   disabled?: boolean;
   /** Override the master's default "Other" affordance. */
   allowOther?: boolean;
+  /** Extra pseudo-options appended after the master's own options (e.g. a
+   *  "Delete transaction" action in a transaction-category picker) — purely
+   *  additive UI affordances, never persisted or merged into the master's
+   *  real option set. */
+  extraOptions?: MasterOption[];
 }
 
 /**
@@ -44,10 +49,12 @@ export function FiniteSetInput({
   placeholder,
   disabled,
   allowOther,
+  extraOptions,
 }: Props) {
   const def = MASTERS[masterId];
   const offerOther = allowOther ?? def.allowOther ?? true;
-  const { options, mode, addOption } = useMaster(masterId, parentValue);
+  const { options: masterOptions, mode, addOption } = useMaster(masterId, parentValue);
+  const options = extraOptions?.length ? [...masterOptions, ...extraOptions] : masterOptions;
   const [addingOther, setAddingOther] = useState(false);
   const [otherText, setOtherText] = useState("");
 

@@ -11,8 +11,10 @@ import { currentMonth, formatMoney, formatMonthLabel } from "@/lib/format";
 import { latestSnapshotPerAccount, totalsByMonth } from "@/db/aggregates";
 import { carryForwardSeries, computeDashboard } from "@/domain/calc";
 import { accountTypeKind } from "@/lib/accountTypes";
+import { ASSET_CATEGORIES, assetCategoryForType, type AssetCategory } from "@/lib/assetCategories";
 import { useTierStore } from "@/stores/tier.store";
 import { resolveTier, type TierContext } from "@/lib/gamification";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 // Heavy widgets are code-split so the index route paints without recharts/xlsx
 // on the critical path. TrendChart pulls in recharts; ExportButton pulls in
@@ -29,6 +31,16 @@ interface AccountLatest {
   currency: string;
   month: string;
   value: number;
+  is_family: number | null;
+  family_relation: string | null;
+}
+
+// One asset category's rows + total, once grouped and zero-filtered.
+interface CategoryGroup {
+  value: AssetCategory;
+  label: string;
+  rows: AccountLatest[];
+  total: number;
 }
 
 export function DashboardPage() {
@@ -67,51 +79,78 @@ export function DashboardPage() {
   );
   const series = useMemo(() => carryForwardSeries(totals), [totals]);
 
-  // Split the latest-snapshot list into assets vs liabilities for the breakdown.
-  // Display-only — the headline totalSavings already nets liabilities out via
-  // totalsByMonth()'s SQL, so this split is just for the per-account grouping.
+  // Split the latest-snapshot list into a Schedule-AL-style asset breakdown
+  // (grouped by category, in ASSET_CATEGORIES' display order), liabilities, and
+  // a family group. Display-only — the headline totalSavings already nets
+  // liabilities out via totalsByMonth()'s SQL, so this grouping is just for the
+  // per-account list. Zero-value ASSET rows are dropped (old/closed accounts
+  // sitting at 0 add clutter, not signal); a category with no non-zero rows
+  // isn't shown at all. tax_refund accounts are intentionally excluded from the
+  // categorized list (assetCategoryForType returns null for it) but still count
+  // toward the Total savings headline above, since that reads straight from the
+  // DB. Accounts flagged `is_family` are pulled out of both the per-category
+  // breakdown and the plain liabilities list into their own "Family" section,
+  // regardless of type — so a family member's bank/loan/etc. account is always
+  // listed separately from the user's own accounts of the same category.
   const breakdown = useMemo(() => {
-    const assets: AccountLatest[] = [];
+    const family: AccountLatest[] = [];
+    let familyTotal = 0;
     const liabilities: AccountLatest[] = [];
-    let assetTotal = 0;
     let liabilityTotal = 0;
+    const byCategory = new Map<AssetCategory, AccountLatest[]>();
     for (const a of perAccount) {
-      if (accountTypeKind(a.account_type) === "liability") {
+      const isLiability = accountTypeKind(a.account_type) === "liability";
+      if (a.is_family) {
+        if (!isLiability && a.value === 0) continue;
+        family.push(a);
+        familyTotal += isLiability ? -a.value : a.value;
+        continue;
+      }
+      if (isLiability) {
         liabilities.push(a);
         liabilityTotal += a.value;
-      } else {
-        assets.push(a);
-        assetTotal += a.value;
+        continue;
       }
+      if (a.value === 0) continue;
+      const cat = assetCategoryForType(a.account_type);
+      if (!cat) continue;
+      const rows = byCategory.get(cat);
+      if (rows) rows.push(a); else byCategory.set(cat, [a]);
     }
-    return { assets, liabilities, assetTotal, liabilityTotal };
+    const categories: CategoryGroup[] = ASSET_CATEGORIES.flatMap((c) => {
+      const rows = byCategory.get(c.value);
+      if (!rows || rows.length === 0) return [];
+      return [{ value: c.value, label: c.label, rows, total: rows.reduce((s, a) => s + a.value, 0) }];
+    });
+    return { categories, liabilities, liabilityTotal, family, familyTotal };
   }, [perAccount]);
 
   return (
     <div className="container max-w-5xl py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
-            <TierBadge ctx={tierCtx} />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {dashboard.latestMonth
-              ? <>As of <strong>{formatMonthLabel(dashboard.latestMonth)}</strong>.</>
-              : "Add an account and a monthly snapshot to start."}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Suspense fallback={null}>
-            <ExportButton />
-          </Suspense>
-          <Button asChild size="sm">
-            <Link to={`/update?month=${currentMonth()}`}>
-              Update {formatMonthLabel(currentMonth())} <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            Dashboard <TierBadge ctx={tierCtx} />
+          </span>
+        }
+        description={
+          dashboard.latestMonth
+            ? <>As of <strong>{formatMonthLabel(dashboard.latestMonth)}</strong>.</>
+            : "Add an account and a monthly snapshot to start."
+        }
+        actions={
+          <>
+            <Suspense fallback={null}>
+              <ExportButton />
+            </Suspense>
+            <Button asChild size="sm">
+              <Link to={`/update?month=${currentMonth()}`}>
+                Update {formatMonthLabel(currentMonth())} <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">
@@ -141,6 +180,11 @@ export function DashboardPage() {
           base={dashboard.mom?.previousValue ?? null}
           subtitle={dashboard.mom ? `vs ${formatMonthLabel(dashboard.mom.previousMonth)}` : "no prior month"}
           currency={currency}
+          linkTo={
+            dashboard.mom && dashboard.latestMonth
+              ? `/changes?from=${dashboard.mom.previousMonth}&to=${dashboard.latestMonth}&label=${encodeURIComponent("Change vs last month")}`
+              : undefined
+          }
         />
 
         <DiffCard
@@ -154,6 +198,11 @@ export function DashboardPage() {
               : `FY starts ${fyStartMonth === 1 ? "Jan" : "Apr"}`
           }
           currency={currency}
+          linkTo={
+            dashboard.fyStart && dashboard.latestMonth
+              ? `/changes?from=${dashboard.fyStart.startMonth}&to=${dashboard.latestMonth}&label=${encodeURIComponent("Change since FY start")}`
+              : undefined
+          }
         />
       </div>
 
@@ -188,7 +237,7 @@ export function DashboardPage() {
                 onChange={(e) => setCustomStart(e.target.value)}
               />
             </div>
-            {dashboard.customStart && (
+            {dashboard.customStart && dashboard.latestMonth && (
               <div className="text-sm">
                 <p className="text-xs text-muted-foreground">
                   Anchored to {formatMonthLabel(dashboard.customStart.startMonth)} ({formatMoney(dashboard.customStart.startValue, currency)})
@@ -196,6 +245,12 @@ export function DashboardPage() {
                 <p className={dashboard.customStart.delta >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}>
                   {dashboard.customStart.delta >= 0 ? "+" : ""}{formatMoney(dashboard.customStart.delta, currency)}
                 </p>
+                <Link
+                  to={`/changes?from=${dashboard.customStart.startMonth}&to=${dashboard.latestMonth}&label=${encodeURIComponent(`Change since ${formatMonthLabel(dashboard.customStart.startMonth)}`)}`}
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  View by account <ArrowRight className="h-3 w-3" />
+                </Link>
               </div>
             )}
           </div>
@@ -210,14 +265,30 @@ export function DashboardPage() {
         <CardContent className="p-0">
           {perAccount.length === 0 ? (
             <p className="p-4 text-xs text-muted-foreground">No snapshots yet.</p>
-          ) : breakdown.liabilities.length === 0 ? (
-            <AccountRows rows={breakdown.assets} />
+          ) : breakdown.categories.length === 0 && breakdown.liabilities.length === 0 && breakdown.family.length === 0 ? (
+            <p className="p-4 text-xs text-muted-foreground">
+              No non-zero accounts yet — snapshots at ₹0 are hidden here.
+            </p>
           ) : (
             <div className="divide-y">
-              <GroupHeader label="Assets" total={breakdown.assetTotal} currency={currency} />
-              <AccountRows rows={breakdown.assets} />
-              <GroupHeader label="Liabilities" total={-breakdown.liabilityTotal} currency={currency} negative />
-              <AccountRows rows={breakdown.liabilities} liability />
+              {breakdown.categories.map((cat) => (
+                <div key={cat.value} className="divide-y">
+                  <GroupHeader label={cat.label} total={cat.total} currency={currency} />
+                  <AccountRows rows={cat.rows} />
+                </div>
+              ))}
+              {breakdown.liabilities.length > 0 && (
+                <div className="divide-y">
+                  <GroupHeader label="Liabilities" total={-breakdown.liabilityTotal} currency={currency} negative />
+                  <AccountRows rows={breakdown.liabilities} />
+                </div>
+              )}
+              {breakdown.family.length > 0 && (
+                <div className="divide-y">
+                  <GroupHeader label="Family" total={breakdown.familyTotal} currency={currency} negative={breakdown.familyTotal < 0} />
+                  <AccountRows rows={breakdown.family} />
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -227,7 +298,7 @@ export function DashboardPage() {
 }
 
 function DiffCard({
-  label, delta, base, subtitle, currency, testId,
+  label, delta, base, subtitle, currency, testId, linkTo,
 }: {
   label: string;
   delta: number | null;
@@ -235,10 +306,13 @@ function DiffCard({
   subtitle: string;
   currency: string;
   testId?: string;
+  /** When set (and there's a delta), the card links to the per-account breakdown. */
+  linkTo?: string;
 }) {
   const positive = delta != null && delta >= 0;
-  return (
-    <Card data-testid={testId}>
+  const clickable = linkTo != null && delta != null;
+  const inner = (
+    <Card data-testid={testId} className={clickable ? "transition-colors hover:border-primary/50 hover:bg-muted/30" : undefined}>
       <CardHeader>
         <CardDescription>{label}</CardDescription>
         <CardTitle className="flex items-center gap-2 text-2xl tabular-nums">
@@ -259,9 +333,19 @@ function DiffCard({
         {base != null && base !== 0 && delta != null && (
           <span className="ml-1">({((delta / Math.abs(base)) * 100).toFixed(1)}%)</span>
         )}
+        {clickable && (
+          <span className="mt-1 flex items-center gap-1 text-primary">
+            View by account <ArrowRight className="h-3 w-3" />
+          </span>
+        )}
       </CardContent>
     </Card>
   );
+  return clickable ? (
+    <Link to={linkTo!} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl">
+      {inner}
+    </Link>
+  ) : inner;
 }
 
 function GroupHeader({
@@ -277,22 +361,30 @@ function GroupHeader({
   );
 }
 
-function AccountRows({ rows, liability }: { rows: AccountLatest[]; liability?: boolean }) {
+function AccountRows({ rows }: { rows: AccountLatest[] }) {
   return (
     <ul className="divide-y">
-      {rows.map((a) => (
-        <li key={a.account_id} className="flex items-center gap-3 px-4 py-2 text-sm">
-          <Link to={`/accounts/${a.account_id}`} className="flex-1 min-w-0 hover:underline">
-            {a.account_name}
-          </Link>
-          <span className="text-xs text-muted-foreground">{formatMonthLabel(a.month)}</span>
-          <span
-            className={`w-32 text-right font-medium tabular-nums ${liability ? "text-destructive" : ""}`}
-          >
-            {formatMoney(a.value, a.currency)}
-          </span>
-        </li>
-      ))}
+      {rows.map((a) => {
+        const liability = accountTypeKind(a.account_type) === "liability";
+        return (
+          <li key={a.account_id} className="flex items-center gap-3 px-4 py-2 text-sm">
+            <Link to={`/accounts/${a.account_id}`} className="flex-1 min-w-0 truncate hover:underline">
+              {a.account_name}
+            </Link>
+            {a.family_relation === "minor" && (
+              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Minor
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">{formatMonthLabel(a.month)}</span>
+            <span
+              className={`w-32 text-right font-medium tabular-nums ${liability ? "text-destructive" : ""}`}
+            >
+              {formatMoney(a.value, a.currency)}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

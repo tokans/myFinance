@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Trash2, Users, Upload, Phone, Mail, UserPlus, Briefcase } from "lucide-react";
+import { Pencil, Trash2, Upload, Phone, Mail, UserPlus, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import {
   type Person, type PersonInput,
 } from "@/db/people";
 import { DangerZone } from "@/components/common/DangerZone";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export function PeoplePage() {
   const [people, setPeople] = useState<Person[]>([]);
@@ -91,41 +92,34 @@ export function PeoplePage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-md bg-primary/10 p-2 text-primary">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">People</h2>
-            <p className="text-sm text-muted-foreground">
-              Family, executor, nominees, doctors, advisors — the contacts your estate plan links to.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Label
-            htmlFor="people-import"
-            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent ${isTauri() ? "" : "pointer-events-none opacity-50"}`}
-          >
-            <Upload className="h-4 w-4" /> {importing ? "Importing…" : "Import"}
-            <input
-              id="people-import"
-              type="file"
-              className="hidden"
-              accept=".xlsx,.xls,.xlsm,.csv,.tsv"
-              onChange={handleImport}
-              disabled={!isTauri() || importing}
-            />
-          </Label>
-          <Button data-testid="person-add-personal" variant="outline" onClick={() => startAdding("personal")} disabled={!isTauri()}>
-            <UserPlus className="h-4 w-4" /> Add family/friend
-          </Button>
-          <Button onClick={() => startAdding("professional")} disabled={!isTauri()}>
-            <Briefcase className="h-4 w-4" /> Add professional
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="People"
+        description="Family, executor, nominees, doctors, advisors — the contacts your estate plan links to."
+        actions={
+          <>
+            <Label
+              htmlFor="people-import"
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent ${isTauri() ? "" : "pointer-events-none opacity-50"}`}
+            >
+              <Upload className="h-4 w-4" /> {importing ? "Importing…" : "Import"}
+              <input
+                id="people-import"
+                type="file"
+                className="hidden"
+                accept=".xlsx,.xls,.xlsm,.csv,.tsv"
+                onChange={handleImport}
+                disabled={!isTauri() || importing}
+              />
+            </Label>
+            <Button data-testid="person-add-personal" variant="outline" onClick={() => startAdding("personal")} disabled={!isTauri()}>
+              <UserPlus className="h-4 w-4" /> Add family/friend
+            </Button>
+            <Button onClick={() => startAdding("professional")} disabled={!isTauri()}>
+              <Briefcase className="h-4 w-4" /> Add professional
+            </Button>
+          </>
+        }
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

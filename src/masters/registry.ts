@@ -8,6 +8,7 @@ import { LIFE_GOAL_TEMPLATES } from "@/domain/lifeGoals";
 import { getCommonBaked } from "sharedcorelib/masters";
 import institutions from "./data/institutions.json";
 import professionalTypes from "./data/professional-types.json";
+import transactionCategories from "./data/transaction-categories.json";
 
 /** Life-goal categories the user can reuse — the gallery's named templates, sans the open "Others" tile. */
 const LIFE_GOAL_BAKED: MasterOption[] = LIFE_GOAL_TEMPLATES.filter((t) => !t.custom).map((t) => ({
@@ -61,6 +62,12 @@ export const MASTERS: Record<MasterId, MasterDef> = {
     id: "professional_type",
     label: "Professional type",
     baked: professionalTypes as MasterOption[],
+    allowOther: true,
+  },
+  transaction_category: {
+    id: "transaction_category",
+    label: "Transaction category",
+    baked: transactionCategories as MasterOption[],
     allowOther: true,
   },
 };

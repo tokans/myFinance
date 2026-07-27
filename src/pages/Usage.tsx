@@ -5,6 +5,7 @@ import { isTauri } from "@/lib/environment";
 import { getLaunchStats, type LaunchStats } from "@/db/usage";
 import { resolveTier, nextEarnedTiers } from "@/lib/gamification";
 import { useTierStore } from "@/stores/tier.store";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 /**
  * Hidden usage screen — reachable only via Ctrl+Shift+Alt+1. Shows every day the
@@ -35,12 +36,10 @@ export function UsagePage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <header className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Usage</h2>
-        <p className="text-sm text-muted-foreground">
-          Every day you've opened myFinance. This is stored only on this device.
-        </p>
-      </header>
+      <PageHeader
+        title="Usage"
+        description="Every day you've opened myFinance. This is stored only on this device."
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

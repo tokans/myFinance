@@ -25,6 +25,7 @@ export const {
   isUnlocked,
   lock,
   saveSnapshot,
+  resetVault,
   putCredential,
   getCredential,
   removeCredential,

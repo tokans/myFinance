@@ -11,6 +11,10 @@ import { createBreakGlassLedger } from "sharedcorelib/breakglass";
 import type { Confidentiality } from "sharedcorelib/schema";
 import { ensureSuiteSchema } from "./schemas";
 import { runLegacyConsolidation } from "./consolidate";
+import { runPersonSpineMigration } from "./personSpine";
+import { runAccountsTypeRebuild } from "./accountsTypeRebuild";
+import { ensureAccountsFamilyColumn } from "./accountsFamilyColumn";
+import { ensureTaxExcludedColumns } from "./taxExcludedColumn";
 
 /**
  * Shared suite database wiring (sharedcorelib/db). After K1 consolidation the suite runs
@@ -69,6 +73,11 @@ export async function initSharedDb(): Promise<void> {
     const sql = adapter(await openSharedDb());
     // Register descriptors + apply aux-SQL (canonical legacy tables + sync triggers).
     await ensureSuiteSchema(sql);
+    // Self-healing: aux-SQL step v1 rebuilds accounts from a frozen legacy DDL that
+    // predates `is_family`, wiping it on a brand-new DB (see accountsFamilyColumn.ts).
+    await ensureAccountsFamilyColumn(sql);
+    // Same self-heal, for tax_income/tax_payments.excluded (see taxExcludedColumn.ts).
+    await ensureTaxExcludedColumns(sql);
     // Ensure the shared common ICE card table exists even if myHealth hasn't run yet.
     await createIceStore(sql).ensure();
     // Ensure the shared-entity spine (person/event/document/asset) and the break-glass
@@ -79,6 +88,16 @@ export async function initSharedDb(): Promise<void> {
     // One-time legacy myfinance.db → suite.db consolidation (decisions 6/24): copy +
     // verify + ledger + delete the legacy file. Idempotent; fail-silent (retries next boot).
     await runLegacyConsolidation(sql);
+    // One-time PERSON-SPINE migration (finding 2.1, invariant 6): lift myfinance_people
+    // identity onto common_person + the finance facet, collapse the table to a thin spine link.
+    // Runs AFTER consolidation so the suite people rows (and any migrated ones) exist. Idempotent;
+    // ledger-tracked; transactional (rolls back + retries on failure — no data loss).
+    await runPersonSpineMigration(sql);
+    // One-time REBUILD of myfinance_accounts widening its `type` CHECK constraint
+    // (3 new asset types for the Dashboard's category breakdown). Runs after the
+    // person-spine migration; ledger-tracked, transactional (see accountsTypeRebuild.ts
+    // for why this can't go through the generic aux-SQL framework).
+    await runAccountsTypeRebuild(sql);
   } catch (e) {
     console.warn("shared-db init/consolidation skipped:", e);
   }

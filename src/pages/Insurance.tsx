@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Shield, Plus, Pencil, Trash2, Check, AlertTriangle } from "lucide-react";
-import { BackLink } from "@/components/layout/BackLink";
+import { Plus, Pencil, Trash2, Check, AlertTriangle } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -73,19 +73,17 @@ export function InsurancePage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <BackLink />
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-md bg-primary/10 p-2 text-primary"><Shield className="h-6 w-6" /></div>
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Insurance</h2>
-            <p className="text-sm text-muted-foreground">Coverage adequacy, renewals, and claims contacts.</p>
-          </div>
-        </div>
-        <Button data-testid="insurance-add-policy" onClick={() => { setAdding(true); setEditing(null); }} disabled={!isTauri()}>
-          <Plus className="h-4 w-4" /> Add policy
-        </Button>
-      </header>
+      <PageHeader
+        backTo="/estate"
+        backLabel="Back to Emergency Planning"
+        title="Insurance"
+        description="Coverage adequacy, renewals, and claims contacts."
+        actions={
+          <Button data-testid="insurance-add-policy" onClick={() => { setAdding(true); setEditing(null); }} disabled={!isTauri()}>
+            <Plus className="h-4 w-4" /> Add policy
+          </Button>
+        }
+      />
 
       <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:border-amber-700/50 dark:bg-amber-950/20">
         <CardContent className="flex items-start gap-2 py-3 text-xs leading-snug text-amber-900 dark:text-amber-200">

@@ -5,12 +5,12 @@ const key = new Uint8Array(32).map((_, i) => (i * 7) % 256);
 
 describe("docCrypto round-trip", () => {
   it("seals and opens back to the original bytes", async () => {
-    const plain = new TextEncoder().encode("Will of Anshuman — original in bank locker");
+    const plain = new TextEncoder().encode("Will of Sample Person — original in bank locker");
     const sealed = await sealWithKey(key, plain);
     // Sealed form is iv(12) || ciphertext, and not equal to plaintext.
     expect(sealed.length).toBeGreaterThan(plain.length + 12);
     const opened = await openWithKey(key, sealed);
-    expect(new TextDecoder().decode(opened)).toBe("Will of Anshuman — original in bank locker");
+    expect(new TextDecoder().decode(opened)).toBe("Will of Sample Person — original in bank locker");
   });
 
   it("uses a random IV so two seals of the same input differ", async () => {

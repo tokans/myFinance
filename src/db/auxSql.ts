@@ -77,7 +77,8 @@ const CANONICAL_TABLES: string[] = [
      updated_at      TEXT,
      sip_day         INTEGER,
      sip_amount      REAL,
-     sip_last_done   TEXT
+     sip_last_done   TEXT,
+     customer_id     TEXT
    )`,
   `CREATE INDEX IF NOT EXISTS idx_mf_accounts_archived ON ${T.accounts}(is_archived)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_mf_accounts_sync ON ${T.accounts}(sync_id)`,
@@ -420,6 +421,9 @@ const CANONICAL_TABLES: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_mf_partners_type ON ${T.partners}(professional_type)`,
 
+  // transactions — see TRANSACTIONS_TABLE below (shipped separately as aux v3,
+  // added long after v1 shipped; kept out of CANONICAL_TABLES per the append-only rule).
+
   // sync_tombstones (0021) — namespaced deletion log.
   `DROP TABLE IF EXISTS ${T.syncTombstones}`,
   `CREATE TABLE IF NOT EXISTS ${T.syncTombstones} (
@@ -440,6 +444,182 @@ const CANONICAL_TABLES: string[] = [
 ];
 
 /**
+ * transactions (new — desktop-only feature, added well after v1 shipped). Kept as
+ * its own step (never folded into CANONICAL_TABLES) per the append-only rule: v1
+ * already ran on every existing install, so a genuinely new table needs its own
+ * version to actually get created there. `matched_transaction_id` is a self-FK
+ * (self-transfer counterpart) — deliberately excluded from `sync/spec.ts`'s
+ * columns (a cycle the single-pass sync merge engine can't safely resolve), so
+ * match state stays device-local.
+ */
+const TRANSACTIONS_TABLE: string[] = [
+  `DROP TABLE IF EXISTS ${T.transactions}`,
+  `CREATE TABLE IF NOT EXISTS ${T.transactions} (
+     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+     account_id             INTEGER NOT NULL REFERENCES ${T.accounts}(id) ON DELETE CASCADE,
+     date                   TEXT,
+     raw_date               TEXT NOT NULL DEFAULT '',
+     description            TEXT NOT NULL DEFAULT '',
+     debit                  REAL,
+     credit                 REAL,
+     balance                REAL,
+     category               TEXT,
+     category_source        TEXT CHECK (category_source IN ('auto','manual')),
+     matched_transaction_id INTEGER REFERENCES ${T.transactions}(id) ON DELETE SET NULL,
+     match_status           TEXT NOT NULL DEFAULT 'none' CHECK (match_status IN ('none','suggested','confirmed','dismissed')),
+     source_path            TEXT,
+     created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+     sync_id                TEXT,
+     updated_at             TEXT
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_transactions_account_date ON ${T.transactions}(account_id, date)`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_transactions_source ON ${T.transactions}(account_id, source_path)`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_transactions_category ON ${T.transactions}(category)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_mf_transactions_sync ON ${T.transactions}(sync_id)`,
+];
+
+/**
+ * ais_sft (new — added alongside transactions, same append-only reasoning:
+ * shipped as its own version since v1 already ran on every existing install).
+ */
+const AIS_SFT_TABLE: string[] = [
+  `DROP TABLE IF EXISTS ${T.aisSft}`,
+  `CREATE TABLE IF NOT EXISTS ${T.aisSft} (
+     id                INTEGER PRIMARY KEY AUTOINCREMENT,
+     ay                TEXT NOT NULL REFERENCES ${T.taxYears}(ay) ON DELETE CASCADE,
+     sft_code          TEXT,
+     description       TEXT NOT NULL DEFAULT '',
+     reporting_entity  TEXT,
+     amount            REAL NOT NULL,
+     date              TEXT,
+     sync_id           TEXT,
+     updated_at        TEXT
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_ais_sft_ay ON ${T.aisSft}(ay)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_mf_ais_sft_sync ON ${T.aisSft}(sync_id)`,
+];
+
+/**
+ * tax_refunds (new — AIS/TIS PDF Part B4 refunds, see `categoryAmountPdf.ts`'s
+ * `extractRefundRows`; informational, not folded into `tax_assessment`).
+ */
+const TAX_REFUNDS_TABLE: string[] = [
+  `DROP TABLE IF EXISTS ${T.taxRefunds}`,
+  `CREATE TABLE IF NOT EXISTS ${T.taxRefunds} (
+     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+     ay            TEXT NOT NULL REFERENCES ${T.taxYears}(ay) ON DELETE CASCADE,
+     amount        REAL NOT NULL,
+     mode          TEXT,
+     refund_date   TEXT,
+     source_path   TEXT,
+     note          TEXT,
+     sync_id       TEXT,
+     updated_at    TEXT
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_tax_refunds_ay ON ${T.taxRefunds}(ay)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_mf_tax_refunds_sync ON ${T.taxRefunds}(sync_id)`,
+];
+
+/**
+ * v9 USED TO BE an `EXCLUDED_COLUMNS` step here (`ALTER TABLE ... ADD COLUMN excluded
+ * ... DEFAULT 0` on tax_income/tax_payments, for the reconciliation screen's
+ * "these two documents report the same real-world event" exclusion flag). Retired —
+ * NOT filled by a new version, permanently a gap in the sequence — because it collided
+ * with `registerSchemas`' own additive-field diff: on any install that had already
+ * registered TaxIncome/TaxPayments (i.e. anything past its very first boot with the new
+ * `excluded` descriptor field), `registerSchemas` adds the column itself the moment
+ * `ensureSuiteSchema` runs, before this step ever got a chance to — so v9's own ADD
+ * COLUMN threw "duplicate column name: excluded" on every subsequent boot, aborting the
+ * whole `registerAuxMigrations` call (and everything after it — see the migration-set
+ * comment below). Same class of hazard `accountsFamilyColumn.ts` already solves for
+ * is_family/family_relation; `excluded` now gets the same fix — see
+ * `taxExcludedColumn.ts`'s `ensureTaxExcludedColumns`, called from `initSharedDb()`.
+ */
+
+/**
+ * recon_links (new — the general "these two records represent/might
+ * represent the same real-world thing" link: bank transaction <-> tax
+ * document row, or tax document row <-> tax document row across different
+ * source documents). `a_kind`/`b_kind` + `a_id`/`b_id` are a polymorphic
+ * reference (kind identifies which table `id` is a local rowid into) —
+ * deliberately device-local, no sync_id/uuid triggers, excluded from
+ * `sync/spec.ts`: the single-pass sync merge kernel has no mechanism to
+ * remap a polymorphic cross-table local id, the same reasoning
+ * `transactions.matched_transaction_id`/`match_status` are device-local for.
+ * Each device recomputes and reviews its own reconciliation candidates.
+ */
+const RECON_LINKS_TABLE: string[] = [
+  `DROP TABLE IF EXISTS ${T.reconLinks}`,
+  `CREATE TABLE IF NOT EXISTS ${T.reconLinks} (
+     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+     a_kind     TEXT NOT NULL,
+     a_id       INTEGER NOT NULL,
+     b_kind     TEXT NOT NULL,
+     b_id       INTEGER NOT NULL,
+     status     TEXT NOT NULL DEFAULT 'suggested' CHECK (status IN ('suggested','confirmed','dismissed')),
+     note       TEXT,
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_mf_recon_links_pair ON ${T.reconLinks}(a_kind, a_id, b_kind, b_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_recon_links_a ON ${T.reconLinks}(a_kind, a_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_recon_links_b ON ${T.reconLinks}(b_kind, b_id)`,
+];
+
+/**
+ * category_rules (new — self-learning classifier memory: a narration pattern the
+ * user has ever manually tagged, kept independently of the transaction rows that
+ * taught it — see domain/transactionCategory.ts's suggestCategoryTagsWithRules
+ * and db/categoryRules.ts). Natural-key on (pattern, category), NOT a uuid: two
+ * devices teaching the same merchant should converge on one rule row rather than
+ * duplicate it — same reasoning as custom_options. One pattern can map to
+ * multiple categories (e.g. a UPI narration learned as both 'upi_payment' and
+ * 'groceries'), so the unique constraint is the PAIR, not the pattern alone.
+ */
+const CATEGORY_RULES_TABLE: string[] = [
+  `DROP TABLE IF EXISTS ${T.categoryRules}`,
+  `CREATE TABLE IF NOT EXISTS ${T.categoryRules} (
+     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+     pattern    TEXT NOT NULL,
+     category   TEXT NOT NULL,
+     hit_count  INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     updated_at TEXT,
+     UNIQUE(pattern, category)
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_category_rules_pattern ON ${T.categoryRules}(pattern)`,
+];
+
+/**
+ * transaction_tags (new — replaces the single category/category_source columns
+ * on transactions with a proper multi-tag model: a transaction can carry more
+ * than one category, e.g. a UPI grocery payment tagged both 'upi_payment' and
+ * 'groceries'). The backfill INSERT runs once (version-gated) and copies every
+ * existing category into a tag row; the legacy columns on `transactions` are
+ * left in place afterwards (never dropped from a populated user table) but no
+ * app code reads/writes them again — see legacySchemas.ts's Transactions doc
+ * comment and sync/spec.ts (which stops syncing those two columns).
+ */
+const TRANSACTION_TAGS_TABLE: string[] = [
+  `DROP TABLE IF EXISTS ${T.transactionTags}`,
+  `CREATE TABLE IF NOT EXISTS ${T.transactionTags} (
+     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+     transaction_id INTEGER NOT NULL REFERENCES ${T.transactions}(id) ON DELETE CASCADE,
+     category       TEXT NOT NULL,
+     source         TEXT NOT NULL DEFAULT 'auto' CHECK (source IN ('auto','manual')),
+     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+     sync_id        TEXT,
+     updated_at     TEXT,
+     UNIQUE(transaction_id, category)
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_transaction_tags_txn ON ${T.transactionTags}(transaction_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_mf_transaction_tags_category ON ${T.transactionTags}(category)`,
+  `INSERT INTO ${T.transactionTags} (transaction_id, category, source, created_at)
+     SELECT id, category, COALESCE(category_source, 'auto'), COALESCE(created_at, datetime('now'))
+     FROM ${T.transactions} WHERE category IS NOT NULL`,
+];
+
+/**
  * UUID-identity tables (keyed on sync_id) and natural-key tables: the 0021/0022
  * trigger suite — AFTER INSERT backfill of sync_id/updated_at, AFTER UPDATE
  * "touch" of updated_at (guarded WHEN NEW.updated_at = OLD.updated_at so a
@@ -448,6 +628,23 @@ const CANONICAL_TABLES: string[] = [
  * `table_name` values keep the LEGACY (un-namespaced) identity so the sync
  * merge engine — which addresses rows by their logical table name — matches.
  */
+/**
+ * The 3-trigger shape (ins-backfill + touch + sync_id tombstone) every UUID-identity
+ * table gets. Factored out so a later-added table (e.g. transactions, aux v4) can
+ * reuse the exact same shape without touching the already-shipped v2 step.
+ */
+export function uuidTriggersFor(tbl: string, logical: string): string[] {
+  const trg = tbl.replace(/[^A-Za-z0-9_]/g, "_");
+  return [
+    `CREATE TRIGGER IF NOT EXISTS trg_${trg}_ins AFTER INSERT ON ${tbl} FOR EACH ROW WHEN NEW.sync_id IS NULL OR NEW.updated_at IS NULL
+     BEGIN UPDATE ${tbl} SET sync_id = COALESCE(NEW.sync_id, lower(hex(randomblob(16)))), updated_at = COALESCE(NEW.updated_at, datetime('now')) WHERE rowid = NEW.rowid; END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_${trg}_touch AFTER UPDATE ON ${tbl} FOR EACH ROW WHEN NEW.updated_at = OLD.updated_at
+     BEGIN UPDATE ${tbl} SET updated_at = datetime('now') WHERE rowid = NEW.rowid; END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_${trg}_tomb AFTER DELETE ON ${tbl} FOR EACH ROW
+     BEGIN INSERT OR REPLACE INTO ${T.syncTombstones}(table_name, key, deleted_at) VALUES('${logical}', OLD.sync_id, datetime('now')); END`,
+  ];
+}
+
 const syncTriggers = (): string[] => {
   // (suite table, logical name used in tombstone rows, key-expr for tombstone).
   const out: string[] = [];
@@ -468,17 +665,7 @@ const syncTriggers = (): string[] => {
     [T.taxDeductions, "tax_deductions"],
     [T.taxPayments, "tax_payments"],
   ];
-  for (const [tbl, logical] of uuid) {
-    const trg = tbl.replace(/[^A-Za-z0-9_]/g, "_");
-    out.push(
-      `CREATE TRIGGER IF NOT EXISTS trg_${trg}_ins AFTER INSERT ON ${tbl} FOR EACH ROW WHEN NEW.sync_id IS NULL OR NEW.updated_at IS NULL
-       BEGIN UPDATE ${tbl} SET sync_id = COALESCE(NEW.sync_id, lower(hex(randomblob(16)))), updated_at = COALESCE(NEW.updated_at, datetime('now')) WHERE rowid = NEW.rowid; END`,
-      `CREATE TRIGGER IF NOT EXISTS trg_${trg}_touch AFTER UPDATE ON ${tbl} FOR EACH ROW WHEN NEW.updated_at = OLD.updated_at
-       BEGIN UPDATE ${tbl} SET updated_at = datetime('now') WHERE rowid = NEW.rowid; END`,
-      `CREATE TRIGGER IF NOT EXISTS trg_${trg}_tomb AFTER DELETE ON ${tbl} FOR EACH ROW
-       BEGIN INSERT OR REPLACE INTO ${T.syncTombstones}(table_name, key, deleted_at) VALUES('${logical}', OLD.sync_id, datetime('now')); END`,
-    );
-  }
+  for (const [tbl, logical] of uuid) out.push(...uuidTriggersFor(tbl, logical));
 
   // custom_options: ins-backfill (updated_at only) + touch + natural-key tombstone.
   {
@@ -530,11 +717,62 @@ const syncTriggers = (): string[] => {
 };
 
 /**
+ * transactions gets the same UUID-identity trigger shape as tax_payments etc.,
+ * but shipped as its own version (v4) since v2 (which contains syncTriggers()'s
+ * output) already ran on every existing install by the time this table was added.
+ */
+const transactionSyncTriggers = (): string[] => uuidTriggersFor(T.transactions, "transactions");
+const aisSftSyncTriggers = (): string[] => uuidTriggersFor(T.aisSft, "ais_sft");
+const taxRefundsSyncTriggers = (): string[] => uuidTriggersFor(T.taxRefunds, "tax_refunds");
+
+/** category_rules gets the custom_options-style natural-key trigger shape
+ *  (ins-backfill of updated_at only + touch + natural-key tombstone), keyed on
+ *  the (pattern, category) pair — shipped as its own version per the
+ *  append-only rule. */
+const categoryRulesSyncTriggers = (): string[] => {
+  const tbl = T.categoryRules;
+  const trg = tbl.replace(/[^A-Za-z0-9_]/g, "_");
+  return [
+    `CREATE TRIGGER IF NOT EXISTS trg_${trg}_ins AFTER INSERT ON ${tbl} FOR EACH ROW WHEN NEW.updated_at IS NULL
+     BEGIN UPDATE ${tbl} SET updated_at = COALESCE(NEW.updated_at, datetime('now')) WHERE rowid = NEW.rowid; END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_${trg}_touch AFTER UPDATE ON ${tbl} FOR EACH ROW WHEN NEW.updated_at = OLD.updated_at
+     BEGIN UPDATE ${tbl} SET updated_at = datetime('now') WHERE rowid = NEW.rowid; END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_${trg}_tomb AFTER DELETE ON ${tbl} FOR EACH ROW
+     BEGIN INSERT OR REPLACE INTO ${T.syncTombstones}(table_name, key, deleted_at) VALUES('category_rules', OLD.pattern || '|' || OLD.category, datetime('now')); END`,
+  ];
+};
+
+/** transaction_tags gets the standard uuid-identity trigger shape (it has its
+ *  own sync_id, like tax_income etc.) — shipped as its own version. */
+const transactionTagsSyncTriggers = (): string[] => uuidTriggersFor(T.transactionTags, "transaction_tags");
+
+/**
  * The full aux-SQL migration set, applied (append-only, idempotent) via
  * `registerAuxMigrations(db, "myfinance", MYFINANCE_AUX_MIGRATIONS)` AFTER
- * `registerSchemas`. v1 = canonical tables; v2 = sync trigger suite.
+ * `registerSchemas`. v1 = canonical tables; v2 = sync trigger suite; v3 =
+ * transactions table (added later); v4 = transactions' own sync triggers;
+ * v5 = ais_sft table; v6 = ais_sft's own sync triggers; v7 = tax_refunds
+ * table; v8 = tax_refunds' own sync triggers; v9 = RETIRED, permanently a gap
+ * (see the comment where it used to be, above RECON_LINKS_TABLE — the excluded
+ * column it added now self-heals via taxExcludedColumn.ts instead); v10 =
+ * recon_links table (device-local, no sync triggers — see its doc comment);
+ * v11 = category_rules table (learned classifier memory); v12 = category_rules'
+ * own sync triggers; v13 = transaction_tags table (+ one-time backfill from the
+ * legacy category columns); v14 = transaction_tags' own sync triggers.
  */
 export const MYFINANCE_AUX_MIGRATIONS: AuxMigrationStep[] = [
   { version: 1, sql: CANONICAL_TABLES },
   { version: 2, sql: syncTriggers() },
+  { version: 3, sql: TRANSACTIONS_TABLE },
+  { version: 4, sql: transactionSyncTriggers() },
+  { version: 5, sql: AIS_SFT_TABLE },
+  { version: 6, sql: aisSftSyncTriggers() },
+  { version: 7, sql: TAX_REFUNDS_TABLE },
+  { version: 8, sql: taxRefundsSyncTriggers() },
+  // v9 retired — see the comment above RECON_LINKS_TABLE.
+  { version: 10, sql: RECON_LINKS_TABLE },
+  { version: 11, sql: CATEGORY_RULES_TABLE },
+  { version: 12, sql: categoryRulesSyncTriggers() },
+  { version: 13, sql: TRANSACTION_TAGS_TABLE },
+  { version: 14, sql: transactionTagsSyncTriggers() },
 ];

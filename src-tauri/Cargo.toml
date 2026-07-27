@@ -31,6 +31,10 @@ tiny_http = "0.12"
 mdns-sd = "0.11"
 local-ip-address = "0.6"
 ureq = { version = "2", default-features = false }
+# Bank-statement / tax-document PDF import (password-aware text/table extraction).
+# See sharedCoreLib/pdf-lib — chosen over bundling Docling directly, which has no
+# native Windows distribution and needs a multi-GB Python/PyTorch runtime.
+pdf-lib = { path = "../../sharedCoreLib/pdf-lib" }
 
 [profile.release]
 panic = "abort"
@@ -38,3 +42,14 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# tauri:dev builds are otherwise fully unoptimized (opt-level 0), which makes
+# Stronghold.load() take 60-120s per vault unlock — a documented upstream issue
+# (tauri-apps/plugins-workspace#2048) in the iota_stronghold/iota-crypto engine
+# itself, not our own Argon2id call (benchmarked at ~67ms once its crate is
+# optimized). The `"*"` package wildcard optimizes every THIRD-PARTY dependency
+# (Stronghold's whole crypto stack included) while leaving our own
+# `myfinance_lib` crate at opt-level 0, so incremental rebuilds of app code
+# stay fast — this does not touch the KDF's salt/params (see src/lib.rs).
+[profile.dev.package."*"]
+opt-level = 3

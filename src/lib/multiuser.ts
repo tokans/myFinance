@@ -63,13 +63,24 @@ export interface FinanceMember {
   memberClass: MemberClass;
 }
 
-/** Project shared `person` rows onto the switchable member list (stable order, self first). */
+/**
+ * Project shared `person` rows onto the switchable member list (stable order, self first).
+ *
+ * Only genuine HOUSEHOLD MEMBERS belong here: the primary user ("self") plus any person
+ * carrying an EXPLICIT `member_class` (provisioned by myLifeAssistant's family management).
+ * Plain estate CONTACTS — finance nominees/executors/attorneys, now single-sourced on the
+ * shared spine with `member_class = null` (finding 2.1) — are NOT switchable users and are
+ * excluded, so a paid account with many contacts still shows a clean member switcher and a
+ * free single-user stays exactly one entry (invariant 3).
+ */
 export function membersFromPeople(people: Person[]): FinanceMember[] {
-  const mapped = people.map((p) => ({
-    key: p.person_key,
-    label: p.display_name?.trim() || p.person_key,
-    memberClass: memberClassOf(p),
-  }));
+  const mapped = people
+    .filter((p) => p.person_key === PRIMARY_MEMBER_KEY || p.member_class != null)
+    .map((p) => ({
+      key: p.person_key,
+      label: p.display_name?.trim() || p.person_key,
+      memberClass: memberClassOf(p),
+    }));
   // Keep the primary user ("self") first; the rest in their incoming order.
   return mapped.sort((a, b) =>
     a.key === PRIMARY_MEMBER_KEY ? -1 : b.key === PRIMARY_MEMBER_KEY ? 1 : 0,

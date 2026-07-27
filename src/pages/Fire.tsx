@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FiniteSetInput } from "@/components/forms/FiniteSetInput";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { cn } from "@/lib/utils";
 import { isTauri } from "@/lib/environment";
 import { DEFAULT_COUNTRY, currencyForCountry } from "@/lib/countryCurrency";
@@ -554,22 +555,21 @@ export function FireCalculatorPage() {
 
   return (
     <div className="container max-w-2xl py-6">
-      <header className="mb-4 flex items-center justify-between gap-3">
-        <Link to="/" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to dashboard
-        </Link>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {STEPS[step]} · {step + 1} / {TOTAL_STEPS}
-        </span>
-      </header>
-
-      <div className="mb-4 flex items-center gap-3">
-        <Flame className="h-6 w-6 text-amber-600" />
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">FIRE calculator</h2>
-          <p className="text-xs text-muted-foreground">Financial Independence, Retire Early</p>
-        </div>
-      </div>
+      <PageHeader
+        backTo="/"
+        backLabel="Back to dashboard"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Flame className="h-5 w-5 text-amber-600" /> FIRE calculator
+          </span>
+        }
+        description="Financial Independence, Retire Early"
+        actions={
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {STEPS[step]} · {step + 1} / {TOTAL_STEPS}
+          </span>
+        }
+      />
 
       <div className="mb-4 h-1 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${visualProgress}%` }} />
@@ -1570,6 +1570,11 @@ function ResultsView({
   const monthlySavingsGap = sim.requiredAdditionalMonthlySavings;
   const progressPct = Math.round(sim.progress * 100);
   const horizonYears = Math.max(0, form.targetAge - form.currentAge);
+  // Already FI: current net worth covers (or exceeds) the FIRE number. Show a
+  // "reached" state instead of a bigger "today" figure sitting next to a smaller
+  // "target", which reads as backwards.
+  const alreadyAchieved = corpus > 0 && form.currentNetWorth >= corpus;
+  const surplus = form.currentNetWorth - corpus;
 
   // Build timeline events: existing goals with dates, new goals from form, FIRE achieved.
   const events = useMemo(() => {
@@ -1625,9 +1630,20 @@ function ResultsView({
               value={`${formatMoney(requiredMonthlySavings, currency)}/mo`}
             />
           </div>
-          <div className="rounded-md bg-background/40 p-3 text-xs">
-            <span className="font-semibold">{variantLabel}</span> — {variantBlurb}
-          </div>
+          {alreadyAchieved ? (
+            <div className="flex items-start gap-2 rounded-md bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <span className="font-semibold">Already achieved</span> — your current net worth of{" "}
+                <strong className="tabular-nums">{formatMoney(form.currentNetWorth, currency)}</strong>{" "}
+                already meets this FIRE number. You're financially independent today.
+              </span>
+            </div>
+          ) : (
+            <div className="rounded-md bg-background/40 p-3 text-xs">
+              <span className="font-semibold">{variantLabel}</span> — {variantBlurb}
+            </div>
+          )}
           {sim.peakRetirementExpense > sim.expenseAtTarget + 1 && (
             <div className="rounded-md bg-background/40 p-3 text-xs text-muted-foreground">
               Retirement spend isn't flat: it peaks at{" "}
@@ -1644,18 +1660,44 @@ function ResultsView({
         <CardContent className="space-y-2 py-4">
           <div className="flex items-baseline justify-between text-sm">
             <span className="font-medium">Progress toward target</span>
-            <span className="tabular-nums text-muted-foreground">{progressPct}%</span>
+            <span className="tabular-nums text-muted-foreground">
+              {alreadyAchieved ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
+                  <CheckCircle2 className="h-4 w-4" /> Achieved
+                </span>
+              ) : (
+                `${progressPct}%`
+              )}
+            </span>
           </div>
           <div className="h-3 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full bg-gradient-to-r from-primary to-amber-500 transition-all"
+              className={cn(
+                "h-full transition-all",
+                alreadyAchieved
+                  ? "bg-emerald-500"
+                  : "bg-gradient-to-r from-primary to-amber-500",
+              )}
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
-            <span>{formatMoney(form.currentNetWorth, currency)} today</span>
-            <span>{formatMoney(corpus, currency)} target</span>
-          </div>
+          {alreadyAchieved ? (
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">
+              Your current net worth of{" "}
+              <strong className="tabular-nums">{formatMoney(form.currentNetWorth, currency)}</strong>{" "}
+              already covers your FIRE number of{" "}
+              <strong className="tabular-nums">{formatMoney(corpus, currency)}</strong>
+              {surplus > 0 && (
+                <> — a surplus of <strong className="tabular-nums">{formatMoney(surplus, currency)}</strong></>
+              )}
+              .
+            </p>
+          ) : (
+            <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+              <span>{formatMoney(form.currentNetWorth, currency)} today</span>
+              <span>{formatMoney(corpus, currency)} target</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -52,13 +52,47 @@ interface LatestPerAccount {
   currency: string;
   month: string;
   value: number;
+  is_family: number | null;
+  family_relation: string | null;
+}
+
+export interface AccountDelta {
+  account_id: number;
+  name: string;
+  type: string;
+  currency: string;
+  from_value: number | null;
+  to_value: number | null;
+}
+
+/**
+ * Per-account snapshot values at two specific months, for the dashboard
+ * change drill-down. Only accounts with a snapshot in at least one of the two
+ * months are returned. Values are the raw stored balances (no carry-forward and
+ * no liability signing) — the caller applies the liability sign so the sum of
+ * signed deltas reconciles exactly with {@link totalsByMonth}'s headline delta.
+ */
+export async function accountDeltasBetween(fromMonth: string, toMonth: string): Promise<AccountDelta[]> {
+  return query<AccountDelta>(
+    `SELECT a.id AS account_id, a.name AS name, a.type AS type, a.currency AS currency,
+            MAX(CASE WHEN s.month = ? THEN s.value END) AS from_value,
+            MAX(CASE WHEN s.month = ? THEN s.value END) AS to_value
+       FROM ${T.accounts} a
+       LEFT JOIN ${T.monthlySnapshot} s
+         ON s.account_id = a.id AND s.month IN (?, ?)
+      WHERE a.is_archived = 0
+      GROUP BY a.id
+     HAVING from_value IS NOT NULL OR to_value IS NOT NULL`,
+    [fromMonth, toMonth, fromMonth, toMonth],
+  );
 }
 
 /** For each non-archived account, return its most recent snapshot. */
 export async function latestSnapshotPerAccount(): Promise<LatestPerAccount[]> {
   return query<LatestPerAccount>(
     `SELECT a.id AS account_id, a.name AS account_name, a.type AS account_type,
-            a.currency AS currency, s.month AS month, s.value AS value
+            a.currency AS currency, s.month AS month, s.value AS value,
+            a.is_family AS is_family, a.family_relation AS family_relation
        FROM ${T.accounts} a
        JOIN ${T.monthlySnapshot} s ON s.account_id = a.id
        JOIN (

@@ -213,3 +213,15 @@ export function inferAccountTypeForName(name: string | null | undefined): Accoun
     institutionImpliedType(inferInstitution(name))
   );
 }
+
+/**
+ * Pull a trailing "(12345)" number suffix off an account name, e.g. "HDFC
+ * Savings (12345)" → "12345", to default the Customer ID field from it. Used
+ * by both the add/edit form (new accounts) and the bulk auto-detect tool
+ * (existing accounts with no customer ID yet).
+ */
+export function extractCustomerIdFromName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const match = name.trim().match(/\((\d+)\)\s*$/);
+  return match ? match[1] : null;
+}

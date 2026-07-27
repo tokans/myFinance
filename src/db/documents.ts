@@ -15,6 +15,7 @@ export type DocumentType =
   | "statement"
   | "id_card"
   | "health_card"
+  | "tax_return"
   | "other";
 
 export const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
@@ -27,6 +28,7 @@ export const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "statement", label: "Statement" },
   { value: "id_card", label: "ID card" },
   { value: "health_card", label: "Health / insurance card" },
+  { value: "tax_return", label: "Tax return / intimation" },
   { value: "other", label: "Other" },
 ];
 

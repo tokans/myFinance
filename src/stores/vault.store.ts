@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import { isUnlocked, lock, unlock } from "@/vault/stronghold";
+import { isUnlocked, lock, resetVault as resetVaultFiles, unlock } from "@/vault/stronghold";
 import { isTauri } from "@/lib/environment";
+import { clearAllCredentialRefs } from "@/db/accounts";
+import { clearAllDocuments } from "@/db/documents";
 
 interface VaultState {
   unlocked: boolean;
@@ -9,6 +11,13 @@ interface VaultState {
   hydrate: () => Promise<void>;
   unlockVault: (password: string) => Promise<void>;
   lockVault: () => Promise<void>;
+  /**
+   * "Forgot password" recovery: permanently deletes the master password,
+   * every stored credential, and every uploaded document, then leaves the
+   * vault as if freshly installed so the caller can set a new password.
+   * Irreversible — there is no key escrow to recover the old data.
+   */
+  resetVault: () => Promise<void>;
 }
 
 /**
@@ -43,5 +52,12 @@ export const useVaultStore = create<VaultState>((set) => ({
   lockVault: async () => {
     await lock();
     set({ unlocked: false });
+  },
+  resetVault: async () => {
+    // Best-effort: DB cleanup must not block wiping the actual secrets below,
+    // and vice versa — a partial failure should still leave no dangling refs.
+    await Promise.allSettled([clearAllCredentialRefs(), clearAllDocuments()]);
+    await resetVaultFiles();
+    set({ unlocked: false, hasMasterPassword: false });
   },
 }));

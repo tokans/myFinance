@@ -15,9 +15,12 @@ export interface AccessGrantWithPerson extends AccessGrant {
 }
 
 export async function listGrants(): Promise<AccessGrantWithPerson[]> {
+  // person_name comes from the shared spine, joined via the thin myfinance_people link.
   return query<AccessGrantWithPerson>(
-    `SELECT g.*, p.name AS person_name FROM ${T.accessGrants} g
-       JOIN ${T.people} p ON p.id = g.person_id ORDER BY g.tier DESC, p.name COLLATE NOCASE`,
+    `SELECT g.*, pr.display_name AS person_name FROM ${T.accessGrants} g
+       JOIN ${T.people} p ON p.id = g.person_id
+       JOIN common_person pr ON pr.person_key = p.person_key
+      ORDER BY g.tier DESC, pr.display_name COLLATE NOCASE`,
   );
 }
 

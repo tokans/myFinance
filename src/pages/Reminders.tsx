@@ -16,6 +16,7 @@ import {
 import { runReminderSweep } from "@/lib/reminderSweep";
 import { advanceSip } from "@/db/accounts";
 import { DangerZone } from "@/components/common/DangerZone";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const BUCKETS: { key: ReminderBucket; label: string; icon: typeof BellRing; tone: string }[] = [
   { key: "overdue", label: "Overdue", icon: AlarmClockOff, tone: "text-destructive" },
@@ -77,23 +78,15 @@ export function RemindersPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-md bg-primary/10 p-2 text-primary">
-            <BellRing className="h-6 w-6" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Reminders</h2>
-            <p className="text-sm text-muted-foreground">
-              FD maturities, document expiries, mutual-fund SIPs and tax deadlines are tracked
-              automatically. Add your own for renewals, reviews, and KYC.
-            </p>
-          </div>
-        </div>
-        <Button data-testid="reminder-add-button" onClick={() => { setAdding(true); setEditing(null); }} disabled={!isTauri()}>
-          <Plus className="h-4 w-4" /> Add reminder
-        </Button>
-      </header>
+      <PageHeader
+        title="Reminders"
+        description="FD maturities, document expiries, mutual-fund SIPs and tax deadlines are tracked automatically. Add your own for renewals, reviews, and KYC."
+        actions={
+          <Button data-testid="reminder-add-button" onClick={() => { setAdding(true); setEditing(null); }} disabled={!isTauri()}>
+            <Plus className="h-4 w-4" /> Add reminder
+          </Button>
+        }
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

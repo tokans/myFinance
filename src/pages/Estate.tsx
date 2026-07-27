@@ -4,6 +4,7 @@ import {
   ClipboardCheck, Users, Database, LifeBuoy, BellRing, type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface Item { to: string; title: string; desc: string; icon: LucideIcon; }
 
@@ -46,13 +47,10 @@ const SECTIONS: { group: string; items: Item[] }[] = [
 export function EstatePage() {
   return (
     <div className="container max-w-4xl py-6">
-      <header className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Estate readiness</h2>
-        <p className="text-sm text-muted-foreground">
-          Prepare so your family can access assets and make decisions without friction. All data stays
-          on this device. This is a planning aid, not legal, financial, or medical advice.
-        </p>
-      </header>
+      <PageHeader
+        title="Estate readiness"
+        description="Prepare so your family can access assets and make decisions without friction. All data stays on this device. This is a planning aid, not legal, financial, or medical advice."
+      />
 
       <div className="space-y-6" data-testid="estate-hub">
         {SECTIONS.map((section) => (

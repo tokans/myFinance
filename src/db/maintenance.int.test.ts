@@ -83,7 +83,7 @@ describe("clearAllData", () => {
     await createReminder({ title: "Renew", due_date: "2026-03-01" });
     await createGoal({ name: "Fund", target_amount: 5000 });
     await upsertTaxYear("2026-27");
-    await insertIncome({ ay: "2026-27", head: "salary", label: "Salary", amount: 9, source_path: null, note: null });
+    await insertIncome({ ay: "2026-27", head: "salary", label: "Salary", amount: 9, source_path: null, note: null, excluded: false });
     await addDocumentMetaOnly({ type: "will", title: "Will", person_id: person, account_id: acc });
     await setSetting("currency", "INR");
 

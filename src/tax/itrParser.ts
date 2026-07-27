@@ -64,6 +64,10 @@ export interface ParseResult {
   assessment: ParsedAssessment;
   /** Number of nested keys we saw but didn't extract — informational. */
   unmappedKeyCount: number;
+  /** Payments with no payer/deductor name in the source JSON — they'll
+   *  display as "(unnamed)"; surfaced so a sparse ITR JSON export is visible
+   *  rather than silently swallowed. */
+  unnamedPayerCount: number;
   /** Form root JSON path, e.g. 'ITR.ITR1'. */
   formRootPath: string | null;
 }
@@ -141,6 +145,7 @@ export function parseItrJson(json: unknown, filename: string): ParseResult {
       net_tax_liability: null, total_taxes_paid: null, refund_or_balance: null,
     },
     unmappedKeyCount: 0,
+    unnamedPayerCount: 0,
     formRootPath: null,
   };
 
@@ -404,6 +409,11 @@ export function parseItrJson(json: unknown, filename: string): ParseResult {
   }
 
   result.unmappedKeyCount = countUnmappedKeys(root);
+  // "advance"/"self_assessment" challans are payments TO the government and
+  // never carry a deductor/payer name — only TDS/TCS rows are expected to.
+  result.unnamedPayerCount = result.payments.filter(
+    (p) => !p.payer_name?.trim() && (p.type === "tds_salary" || p.type === "tds_other" || p.type === "tcs"),
+  ).length;
   return result;
 }
 

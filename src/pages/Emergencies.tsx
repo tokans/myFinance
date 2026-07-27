@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { LifeBuoy, AlertTriangle, Pencil, ShieldCheck, PhoneOff } from "lucide-react";
-import { BackLink } from "@/components/layout/BackLink";
+import { AlertTriangle, Pencil, ShieldCheck, PhoneOff } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmergencyActionButton } from "@/components/emergency/EmergencyActionButton";
@@ -39,19 +39,12 @@ export function EmergenciesPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <BackLink />
-      <header className="mb-4 flex items-start gap-3">
-        <div className="rounded-md bg-destructive/10 p-2 text-destructive">
-          <LifeBuoy className="h-6 w-6" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Prepare for Emergencies</h2>
-          <p className="text-sm text-muted-foreground">
-            Record what your family should do — and who to call — for each account, so they can act
-            during a hospitalisation, incapacity, or loss.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        backTo="/estate"
+        backLabel="Back to Emergency Planning"
+        title="Prepare for Emergencies"
+        description="Record what your family should do — and who to call — for each account, so they can act during a hospitalisation, incapacity, or loss."
+      />
 
       {/* Required disclaimer, always visible. */}
       <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:border-amber-700/50 dark:bg-amber-950/20">

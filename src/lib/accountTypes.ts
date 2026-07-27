@@ -31,7 +31,10 @@ export type AccountType =
   | "credit_card"
   | "insurance"
   | "tax_refund"
-  | "other";
+  | "other"
+  | "loan_given"
+  | "art_collectible"
+  | "vehicle";
 
 export interface AccountTypeMeta {
   value: AccountType;
@@ -74,6 +77,12 @@ export const ACCOUNT_TYPES: AccountTypeMeta[] = [
   // (an asset); a negative balance is tax still payable, which reduces net worth.
   // Kept "asset" so the value is summed with its sign rather than abs-ed.
   { value: "tax_refund", label: "Tax Refund", kind: "asset", hint: "Refund due (positive) / tax payable (negative)" },
+  // Added later, for the Dashboard's Schedule-AL-style asset-category breakdown
+  // (see src/lib/assetCategories.ts) — each maps to a category with no other
+  // existing type. Same "appended last" rule applies (sprite fallback).
+  { value: "loan_given", label: "Loan / Advance Given", kind: "asset", hint: "Money lent to someone else" },
+  { value: "art_collectible", label: "Art / Collectibles", kind: "asset", hint: "Archaeological collections, art, antiques" },
+  { value: "vehicle", label: "Vehicle", kind: "asset", hint: "Car, bike, yacht, boat, aircraft" },
 ];
 
 export const ACCOUNT_TYPE_VALUES = ACCOUNT_TYPES.map((t) => t.value) as [
@@ -117,7 +126,7 @@ export const RETIREMENT_INCOME_TYPES: AccountType[] = ["nps", "epf", "ppf"];
 // whole-word and case-insensitive. Generic single words like "bank" are left
 // out on purpose — too ambiguous to guess from.
 const TYPE_KEYWORDS: { type: AccountType; words: string[] }[] = [
-  { type: "credit_card", words: ["credit card", "creditcard", "cc"] },
+  { type: "credit_card", words: ["credit card", "creditcard", "credit", "cc"] },
   { type: "fixed_deposit", words: ["fixed deposit", "term deposit", "fd"] },
   { type: "recurring_deposit", words: ["recurring deposit", "rd"] },
   { type: "ppf", words: ["ppf", "public provident"] },
@@ -132,7 +141,14 @@ const TYPE_KEYWORDS: { type: AccountType; words: string[] }[] = [
   { type: "real_estate", words: ["real estate", "realty", "property", "apartment", "flat", "plot", "land"] },
   { type: "crypto", words: ["crypto", "bitcoin", "ethereum", "btc", "eth"] },
   { type: "insurance", words: ["insurance", "ulip", "endowment", "lic", "term plan", "policy"] },
+  // Must come before the generic "loan" entry below: "Loan Given to Raj" should
+  // resolve to the money-lent-out asset type, not the debt-owed liability type.
+  { type: "loan_given", words: ["loan given", "loans given", "advance given", "money lent", "amount lent"] },
   { type: "loan", words: ["loan", "mortgage", "emi"] },
+  // Must come after "loan" (so "Car Loan" still resolves to loan) and after
+  // "insurance" (so "Car Insurance" still resolves to insurance).
+  { type: "vehicle", words: ["vehicle", "car", "bike", "motorcycle", "scooter", "yacht", "boat", "aircraft"] },
+  { type: "art_collectible", words: ["art", "artwork", "antique", "antiques", "painting", "sculpture", "collectible", "collectibles"] },
   // Lower priority than the specific investment/deposit types above, so a
   // "Tax Saver FD"/"ELSS Tax Saver" still resolves to fd/mutual_funds; a bare
   // "Tax" / "Income Tax Refund" / "Advance Tax" lands here.

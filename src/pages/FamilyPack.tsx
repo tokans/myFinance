@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Users, FileDown, Wand2 } from "lucide-react";
-import { BackLink } from "@/components/layout/BackLink";
+import { FileDown, Wand2 } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,14 +54,12 @@ export function FamilyPackPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <BackLink />
-      <header className="mb-4 flex items-start gap-3">
-        <div className="rounded-md bg-primary/10 p-2 text-primary"><Users className="h-6 w-6" /></div>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Family communication pack</h2>
-          <p className="text-sm text-muted-foreground">A "what-if" briefing for a designated family member.</p>
-        </div>
-      </header>
+      <PageHeader
+        backTo="/estate"
+        backLabel="Back to Emergency Planning"
+        title="Family communication pack"
+        description={'A "what-if" briefing for a designated family member.'}
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

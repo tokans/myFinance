@@ -70,6 +70,42 @@ describe("people", () => {
     expect(await countPeople()).toBe(1);
   });
 
+  it("single-sources identity on the spine; finance fields on the facet (invariant 6)", async () => {
+    const id = await createPerson({
+      name: "Priya", relationship: "Spouse", phone: "+91-9", email: "p@x.com",
+      id_proof_ref: "AAD-9", access_tier: 2, notes: "executor",
+    });
+    // Flat read still works exactly as before.
+    const p = (await listPeople()).find((x) => x.id === id)!;
+    expect(p).toMatchObject({ name: "Priya", phone: "+91-9", email: "p@x.com", id_proof_ref: "AAD-9", access_tier: 2, notes: "executor" });
+
+    // Identity lives ONCE on common_person; the thin link carries NO identity columns.
+    const person = h.db!.prepare(`SELECT display_name, contact_phone FROM common_person WHERE person_key = ?`).get("mf-" + id) as Record<string, unknown>;
+    expect(person).toEqual({ display_name: "Priya", contact_phone: "+91-9" });
+    const linkCols = (h.db!.prepare(`PRAGMA table_info(${T.people})`).all() as { name: string }[]).map((r) => r.name);
+    expect(linkCols).not.toContain("name");
+    expect(linkCols).not.toContain("access_tier");
+
+    // Finance estate fields live on the facet, keyed by person_key.
+    const facet = h.db!.prepare(`SELECT access_tier, id_proof_ref, notes FROM ${T.personFacet} WHERE person_key = ?`).get("mf-" + id);
+    expect(facet).toEqual({ access_tier: 2, id_proof_ref: "AAD-9", notes: "executor" });
+  });
+
+  it("access_tier disclosure preserved: Tier-0 filter (ICE contacts) still selects correctly", async () => {
+    await createPerson({ name: "Ravi", access_tier: 0 });   // emergency contact
+    await createPerson({ name: "Meena", access_tier: 1 });  // summary
+    await createPerson({ name: "Sunil", access_tier: 2 });  // full
+    const tier0 = (await listPeople()).filter((p) => p.access_tier === 0);
+    expect(tier0.map((p) => p.name)).toEqual(["Ravi"]);
+  });
+
+  it("delete removes the spine identity + facet too (no orphans)", async () => {
+    const id = await createPerson({ name: "Temp", access_tier: 1 });
+    await deletePerson(id);
+    expect(h.db!.prepare(`SELECT COUNT(*) n FROM common_person WHERE person_key = ?`).get("mf-" + id)).toEqual({ n: 0 });
+    expect(h.db!.prepare(`SELECT COUNT(*) n FROM ${T.personFacet} WHERE person_key = ?`).get("mf-" + id)).toEqual({ n: 0 });
+  });
+
   async function getPersonById(id: number) {
     return (await listPeople()).find((p) => p.id === id)!;
   }

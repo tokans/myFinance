@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollText, Save, AlertTriangle, Check, FileDown } from "lucide-react";
-import { BackLink } from "@/components/layout/BackLink";
+import { Save, AlertTriangle, Check, FileDown } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -77,14 +77,12 @@ export function WillPage() {
 
   return (
     <div className="container max-w-3xl py-6">
-      <BackLink />
-      <header className="mb-4 flex items-start gap-3">
-        <div className="rounded-md bg-primary/10 p-2 text-primary"><ScrollText className="h-6 w-6" /></div>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Will & legal vault</h2>
-          <p className="text-sm text-muted-foreground">Store and version your Will; reconcile it against nominees.</p>
-        </div>
-      </header>
+      <PageHeader
+        backTo="/estate"
+        backLabel="Back to Emergency Planning"
+        title="Will & legal vault"
+        description="Store and version your Will; reconcile it against nominees."
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

@@ -4,7 +4,7 @@ import { buildIceLines, iceCardText, iceContactsWithPhone, isIceEmpty } from "./
 describe("buildIceLines", () => {
   it("includes only non-empty fields, in order", () => {
     const lines = buildIceLines({
-      fullName: "Anshuman Das",
+      fullName: "Sample Person",
       bloodGroup: "O+",
       allergies: "",
       conditions: "Hypertension",
@@ -13,7 +13,7 @@ describe("buildIceLines", () => {
       contacts: [],
     });
     expect(lines).toEqual([
-      { label: "Name", value: "Anshuman Das" },
+      { label: "Name", value: "Sample Person" },
       { label: "Blood group", value: "O+" },
       { label: "Conditions", value: "Hypertension" },
       { label: "Organ donor", value: "Yes" },
@@ -40,7 +40,7 @@ describe("iceContactsWithPhone", () => {
 describe("iceCardText", () => {
   it("renders a card with contacts and disclaimer", () => {
     const text = iceCardText({
-      fullName: "Anshuman",
+      fullName: "Sample Person",
       bloodGroup: "O+",
       contacts: [{ name: "Priya", relationship: "Spouse", phone: "+91 99999 88888" }],
     });

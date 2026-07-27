@@ -12,17 +12,19 @@
  *   - The shared `person` row is identity ONLY. Finance-specific data (estate access tier,
  *     id-proof, notes) lives in the myFinance-owned facet table keyed by `person_key`
  *     (field-level ownership). We never re-model the person locally.
- *   - Identity is explicit-reference: {@link pickOrCreatePerson}. Dedup is a *suggestion*
- *     a human confirms ({@link suggestPersonDuplicates}) — never an auto-merge.
+ *   - Identity is explicit-reference. Dedup is a *suggestion* a human confirms
+ *     ({@link suggestPersonDuplicates}) — never an auto-merge.
  *
- * This module is ADDITIVE and Tauri-only. The app's own `myfinance.db` `people`/`accounts`
- * tables are untouched by this; this layer mirrors/links them into the shared `suite.db`.
+ * Person-spine WRITES (common_person + myfinance_person_facet + the myfinance_people thin
+ * link, keyed `mf-<id>`) are owned solely by {@link module:db/people} — this module is the
+ * read/aggregate side (the entities store, dedup suggestions, net-worth aggregation).
+ *
+ * This module is Tauri-only for its live store; the pure helpers are unit-testable without it.
  */
 import { isTauri } from "@/lib/environment";
 import { openSharedDbAdapter } from "./sharedDb";
 import {
   createEntitiesStore,
-  personKeyFor,
   type EntitiesStore,
   type Person as SharedPerson,
   type Asset as SharedAsset,
@@ -30,28 +32,12 @@ import {
   type EventRow as SharedEvent,
   type DuplicateSuggestion,
 } from "sharedcorelib/entities";
-import { tableName, createTableSql, type SqlDb } from "sharedcorelib/db";
-import { MYFINANCE_PERSON_FACET_SCHEMA } from "./schemas";
 
 const APP_ID = "myfinance";
 
 export type {
   SharedPerson, SharedAsset, SharedDocument, SharedEvent, DuplicateSuggestion,
 };
-export { personKeyFor };
-
-/** Finance-specific facet of a shared person (kept beside core identity, not inside it). */
-export interface PersonFacet {
-  person_key: string;
-  access_tier?: number | null;
-  id_proof_ref?: string | null;
-  notes?: string | null;
-  local_person_id?: number | null;
-  updated_at?: string | null;
-  source_app?: string | null;
-}
-
-const FACET_TABLE = `"${tableName(MYFINANCE_PERSON_FACET_SCHEMA).replace(/[^A-Za-z0-9_]/g, "_")}"`;
 
 /**
  * The shared entities store bound to the suite DB, or null outside Tauri / when the shared
@@ -70,78 +56,12 @@ export async function entitiesStore(): Promise<EntitiesStore | null> {
   }
 }
 
-// ── Person facet store (DI: pass the SqlDb so it's unit-testable) ────────────
-
-export function createPersonFacetStore(db: SqlDb) {
-  return {
-    ensure: async () => {
-      for (const sql of createTableSql(MYFINANCE_PERSON_FACET_SCHEMA)) await db.execute(sql);
-    },
-    get: async (personKey: string): Promise<PersonFacet | null> =>
-      (await db.select<PersonFacet>(`SELECT * FROM ${FACET_TABLE} WHERE person_key = ?`, [personKey]))[0] ?? null,
-    list: (): Promise<PersonFacet[]> => db.select<PersonFacet>(`SELECT * FROM ${FACET_TABLE}`),
-    upsert: async (f: PersonFacet): Promise<void> => {
-      const cols = ["person_key", "access_tier", "id_proof_ref", "notes", "local_person_id", "updated_at", "source_app"] as const;
-      const row = { ...f, source_app: f.source_app ?? APP_ID, updated_at: f.updated_at ?? new Date().toISOString() };
-      await db.execute(
-        `INSERT OR REPLACE INTO ${FACET_TABLE} (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`,
-        cols.map((c) => (row as Record<string, unknown>)[c] ?? null),
-      );
-    },
-    remove: async (personKey: string): Promise<void> => {
-      await db.execute(`DELETE FROM ${FACET_TABLE} WHERE person_key = ?`, [personKey]);
-    },
-  };
-}
-
-export type PersonFacetStore = ReturnType<typeof createPersonFacetStore>;
-
 // ── Pure helpers (DI; unit-testable without Tauri) ──────────────────────────
-
-/** A myFinance local `people` row (subset needed to project into the shared spine). */
-export interface LocalPersonLike {
-  id: number;
-  name: string;
-  relationship?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  access_tier?: number | null;
-  id_proof_ref?: string | null;
-  notes?: string | null;
-  isSelf?: boolean;
-}
-
-/**
- * Project a local estate person onto the shared spine by EXPLICIT REFERENCE: pick the
- * existing shared `person` for its key (or create a thin identity), then store finance
- * facet data beside it. Returns the resolved `person_key`. Never merges identities.
- */
-export async function linkLocalPerson(
-  entities: EntitiesStore,
-  facets: PersonFacetStore,
-  local: LocalPersonLike,
-): Promise<string> {
-  const key = personKeyFor({ isSelf: !!local.isSelf, name: local.name });
-  // Explicit-reference: resolve (or thinly create) the shared identity for this key —
-  // NEVER merging two identities. Then write the latest identity fields for THIS key
-  // (editing the same referenced person is legitimate; it is not a merge).
-  await entities.pickOrCreatePerson(key, { display_name: local.name });
-  await entities.upsertPerson({
-    person_key: key,
-    display_name: local.name,
-    relationship_to_self: local.relationship ?? null,
-    contact_phone: local.phone ?? null,
-    contact_email: local.email ?? null,
-  });
-  await facets.upsert({
-    person_key: key,
-    access_tier: local.access_tier ?? 0,
-    id_proof_ref: local.id_proof_ref ?? null,
-    notes: local.notes ?? null,
-    local_person_id: local.id,
-  });
-  return key;
-}
+//
+// NOTE: writing a finance contact onto the spine (common_person + myfinance_person_facet +
+// the myfinance_people thin link) is owned SOLELY by db/people.ts (createPerson/updatePerson,
+// keyed `mf-<id>` via personKeyForLocal). There is intentionally no second writer here — a
+// parallel link helper would risk a divergent, name-slug-keyed identity (finding 2.1).
 
 /**
  * Guided-merge: which shared people *look* like duplicates of a local person (same name

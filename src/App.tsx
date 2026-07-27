@@ -8,11 +8,27 @@ import { DashboardPage } from "@/pages/Dashboard";
 const AccountsPage = lazy(() => import("@/pages/Accounts").then((m) => ({ default: m.AccountsPage })));
 const AccountDetailPage = lazy(() => import("@/pages/AccountDetail").then((m) => ({ default: m.AccountDetailPage })));
 const MonthlyUpdatePage = lazy(() => import("@/pages/MonthlyUpdate").then((m) => ({ default: m.MonthlyUpdatePage })));
+const ChangesPage = lazy(() => import("@/pages/Changes").then((m) => ({ default: m.ChangesPage })));
 const TaxPage = lazy(() => import("@/pages/Tax").then((m) => ({ default: m.TaxPage })));
 const TaxImportPage = lazy(() => import("@/pages/TaxImport").then((m) => ({ default: m.TaxImportPage })));
+const AisImportPage = lazy(() => import("@/pages/AisImport").then((m) => ({ default: m.AisImportPage })));
+const TdsDocumentImportPage = lazy(() => import("@/pages/TdsDocumentImport").then((m) => ({ default: m.TdsDocumentImportPage })));
+const Form16ImportPage = lazy(() => import("@/pages/Form16Import").then((m) => ({ default: m.Form16ImportPage })));
+const CategoryDocumentImportPage = lazy(() => import("@/pages/CategoryDocumentImport").then((m) => ({ default: m.CategoryDocumentImportPage })));
+const ItReturnImportPage = lazy(() => import("@/pages/ItReturnImport").then((m) => ({ default: m.ItReturnImportPage })));
+const CapitalGainsImportPage = lazy(() => import("@/pages/CapitalGainsImport").then((m) => ({ default: m.CapitalGainsImportPage })));
+const CaComputationImportPage = lazy(() => import("@/pages/CaComputationImport").then((m) => ({ default: m.CaComputationImportPage })));
+const TaxFolderImportPage = lazy(() => import("@/pages/TaxFolderImport").then((m) => ({ default: m.TaxFolderImportPage })));
+const CaComputationReconPage = lazy(() => import("@/pages/CaComputationRecon").then((m) => ({ default: m.CaComputationReconPage })));
+const TaxReturnPage = lazy(() => import("@/pages/TaxReturn").then((m) => ({ default: m.TaxReturnPage })));
 const TaxWizardPage = lazy(() => import("@/pages/TaxWizard").then((m) => ({ default: m.TaxWizardPage })));
 const TaxDetailPage = lazy(() => import("@/pages/TaxDetail").then((m) => ({ default: m.TaxDetailPage })));
 const ImportPage = lazy(() => import("@/pages/Import").then((m) => ({ default: m.ImportPage })));
+const StatementPdfImportPage = lazy(() => import("@/pages/StatementPdfImport").then((m) => ({ default: m.StatementPdfImportPage })));
+const TransactionsPage = lazy(() => import("@/pages/Transactions").then((m) => ({ default: m.TransactionsPage })));
+const TransactionMatchesPage = lazy(() => import("@/pages/TransactionMatches").then((m) => ({ default: m.TransactionMatchesPage })));
+const SftCrossCheckPage = lazy(() => import("@/pages/SftCrossCheck").then((m) => ({ default: m.SftCrossCheckPage })));
+const ReconciliationPage = lazy(() => import("@/pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
 const ExportPage = lazy(() => import("@/pages/Export").then((m) => ({ default: m.ExportPage })));
 const SyncPage = lazy(() => import("@/pages/Sync").then((m) => ({ default: m.SyncPage })));
 const GoalsPage = lazy(() => import("@/pages/Goals").then((m) => ({ default: m.GoalsPage })));
@@ -35,6 +51,7 @@ const SettingsPage = lazy(() => import("@/pages/Settings").then((m) => ({ defaul
 const SuitePage = lazy(() => import("@/pages/Suite").then((m) => ({ default: m.SuitePage })));
 const UsagePage = lazy(() => import("@/pages/Usage").then((m) => ({ default: m.UsagePage })));
 import { FeatureGuard } from "@/components/layout/FeatureGuard";
+import { RemountOnNavigate } from "@/hooks/useQueuedDocumentImport";
 import { useSettingsStore } from "@/stores/settings.store";
 import { runReminderSweep } from "@/lib/reminderSweep";
 import { isTauri } from "@/lib/environment";
@@ -140,11 +157,28 @@ export default function App() {
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="update" element={<MonthlyUpdatePage />} />
+          <Route path="changes" element={<ChangesPage />} />
           <Route path="tax" element={<FeatureGuard feature="tax"><TaxPage /></FeatureGuard>} />
-          <Route path="tax/import" element={<TaxImportPage />} />
+          <Route path="tax/folder-import" element={<TaxFolderImportPage />} />
+          <Route path="tax/import" element={<RemountOnNavigate><TaxImportPage /></RemountOnNavigate>} />
+          <Route path="tax/ais" element={<AisImportPage />} />
+          <Route path="tax/ais-pdf" element={<RemountOnNavigate><CategoryDocumentImportPage variant="ais" /></RemountOnNavigate>} />
+          <Route path="tax/tis-pdf" element={<RemountOnNavigate><CategoryDocumentImportPage variant="tis" /></RemountOnNavigate>} />
+          <Route path="tax/26as" element={<RemountOnNavigate><TdsDocumentImportPage /></RemountOnNavigate>} />
+          <Route path="tax/form16" element={<RemountOnNavigate><Form16ImportPage /></RemountOnNavigate>} />
+          <Route path="tax/it-return" element={<RemountOnNavigate><ItReturnImportPage /></RemountOnNavigate>} />
+          <Route path="tax/capital-gains" element={<RemountOnNavigate><CapitalGainsImportPage /></RemountOnNavigate>} />
+          <Route path="tax/ca-computation" element={<RemountOnNavigate><CaComputationImportPage /></RemountOnNavigate>} />
           <Route path="tax/wizard" element={<TaxWizardPage />} />
+          <Route path="tax/:ay/return" element={<TaxReturnPage />} />
+          <Route path="tax/:ay/sft" element={<SftCrossCheckPage />} />
+          <Route path="tax/:ay/recon" element={<ReconciliationPage />} />
+          <Route path="tax/:ay/ca-recon" element={<CaComputationReconPage />} />
           <Route path="tax/:ay" element={<TaxDetailPage />} />
           <Route path="import" element={<ImportPage />} />
+          <Route path="import/statement-pdf" element={<RemountOnNavigate><StatementPdfImportPage /></RemountOnNavigate>} />
+          <Route path="transactions" element={<TransactionsPage />} />
+          <Route path="transactions/matches" element={<TransactionMatchesPage />} />
           <Route path="export" element={<ExportPage />} />
           <Route path="sync" element={<FeatureGuard feature="sync"><SyncPage /></FeatureGuard>} />
           <Route path="goals" element={<GoalsPage />} />

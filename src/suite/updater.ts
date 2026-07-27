@@ -12,12 +12,15 @@
  * (see `config.ts`) signature checks fail closed, so nothing applies until the
  * real publisher keys + feed exist.
  */
-import { createSuiteUpdater, type SuiteTarget, type UpdatePlan, type PublishedApp } from "sharedcorelib/suite";
+import {
+  createSuiteUpdater, createLocalStateAdapter, currentAppVersion,
+  type SuiteTarget, type UpdatePlan, type PublishedApp,
+} from "sharedcorelib/suite";
 import { query, T } from "@/db/client";
 import { isTauri } from "@/lib/environment";
-import { SUITE_TRUST_ANCHOR, SUITE_TRANSPORT_KEY_B64 } from "./config";
-import { cachePublishedApps } from "./registry";
-import { currentAppVersion } from "./version";
+import { SUITE_TRUST_ANCHOR, SUITE_TRANSPORT_KEY_B64, SUITE_APP_ID } from "./config";
+
+const { cachePublishedApps } = createLocalStateAdapter(SUITE_APP_ID);
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const LAST_CHECK_KEY = "suite:lastCheckedAt";

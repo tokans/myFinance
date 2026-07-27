@@ -40,6 +40,11 @@ function makeDb() {
       dedupe_key  TEXT UNIQUE,
       account_id  INTEGER REFERENCES ${T.accounts}(id) ON DELETE CASCADE
     );
+    CREATE TABLE ${T.transactions} (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id  INTEGER NOT NULL REFERENCES ${T.accounts}(id) ON DELETE CASCADE,
+      description TEXT NOT NULL DEFAULT ''
+    );
   `);
 
   // Mirror mergeAccounts(): build the script and run it as one batch.
@@ -74,6 +79,9 @@ describe("merge accounts", () => {
         (2, '2026-02', 222),   -- moves to survivor
         (2, '2026-03', 999),   -- conflict, dropped
         (3, '2026-04', 444);   -- moves to survivor
+      INSERT INTO ${T.transactions} (account_id, description) VALUES
+        (2, 'txn on #2'),
+        (3, 'txn on #3');
     `);
   });
 
@@ -91,6 +99,13 @@ describe("merge accounts", () => {
       "2026-03": 300, // survivor's value won, not 999
       "2026-04": 444,
     });
+  });
+
+  it("reassigns the merged-away accounts' transactions onto the survivor", () => {
+    ctx.merge(1, [1, 2, 3]);
+    const txns = ctx.all<{ account_id: number }>(`SELECT account_id FROM ${T.transactions}`);
+    expect(txns).toHaveLength(2);
+    expect(txns.every((t) => t.account_id === 1)).toBe(true);
   });
 
   it("deletes the merged-away accounts and leaves the survivor", () => {

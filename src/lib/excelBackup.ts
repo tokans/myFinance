@@ -8,34 +8,19 @@
  * suite app's workbook. Secret-tier / password-named fields export as one-way sha256
  * fingerprints and are skipped on import (core rule). Stronghold vault credentials are not
  * in SQLite and are never exported at all.
+ *
+ * The build + native-save mechanisms now live in the shared core (`buildSuiteBackup` +
+ * `saveBackupBytes`); this file just binds them to myFinance's app id + DB adapter.
  */
-import * as XLSX from "xlsx";
-import {
-  createExcelBackup, suiteSourceFull,
-  type ExcelBackup, type XlsxModule, type BackupSource,
-} from "sharedcorelib/backup";
-import { loadRegistry } from "sharedcorelib/db";
+import { buildSuiteBackup, saveBackupBytes, type ExcelBackup } from "sharedcorelib/backup";
 import { openSharedDbAdapter } from "@/db/sharedDb";
 
 const APP_ID = "myfinance";
 
 /** Build the backup engine over the single suite DB. Tauri-only (suite DB throws in browser). */
-export async function buildExcelBackup(): Promise<ExcelBackup> {
-  // FULL suite dump: every installed app's tables in suite.db — any app's export is the
-  // suite-wide data inventory + backup; suite sheets restore from any app's workbook.
-  const suite = await openSharedDbAdapter();
-  const sources: BackupSource[] = [suiteSourceFull(suite, await loadRegistry(suite))];
-  return createExcelBackup({ appId: APP_ID, sources, xlsx: XLSX as unknown as XlsxModule });
+export function buildExcelBackup(): Promise<ExcelBackup> {
+  return buildSuiteBackup({ appId: APP_ID, openDb: openSharedDbAdapter });
 }
 
-/** Native save handler for `BackupPanel` (Tauri dialog + fs, like the Excel exporter). */
-export async function saveBackupFile(bytes: Uint8Array, fileName: string): Promise<void> {
-  const { save } = await import("@tauri-apps/plugin-dialog");
-  const { writeFile } = await import("@tauri-apps/plugin-fs");
-  const path = await save({
-    defaultPath: fileName,
-    filters: [{ name: "Excel workbook", extensions: ["xlsx"] }],
-  });
-  if (!path) throw new Error("Export cancelled — no file chosen.");
-  await writeFile(path, bytes);
-}
+/** Native save handler for `BackupPanel` (Tauri dialog + fs). */
+export const saveBackupFile = saveBackupBytes;

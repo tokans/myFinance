@@ -11,6 +11,9 @@
 import { DatabaseSync } from "node:sqlite";
 import type { SqlDb } from "sharedcorelib/db";
 import { ensureSuiteSchema } from "../schemas";
+import { migratePersonSpine } from "../personSpine";
+import { ensureAccountsFamilyColumn } from "../accountsFamilyColumn";
+import { ensureTaxExcludedColumns } from "../taxExcludedColumn";
 
 /** Adapt a node:sqlite handle to the lib's SqlDb (boolean→0/1, objects→JSON). */
 function adapt(raw: DatabaseSync): SqlDb {
@@ -39,6 +42,15 @@ export async function buildSuiteTestDb(): Promise<DatabaseSync> {
   // Tauri SQL plugin default — the 0021 touch triggers rely on it (a recursive fire within
   // the same datetime('now') second would otherwise see NEW.updated_at == OLD.updated_at).
   raw.exec("PRAGMA foreign_keys = ON;");
-  await ensureSuiteSchema(adapt(raw));
+  const sql = adapt(raw);
+  await ensureSuiteSchema(sql);
+  // Mirror the production self-heal: aux-SQL v1's frozen legacy DDL predates
+  // `is_family` and wipes it on a brand-new DB (see accountsFamilyColumn.ts).
+  await ensureAccountsFamilyColumn(sql);
+  // Same self-heal, for tax_income/tax_payments.excluded (see taxExcludedColumn.ts).
+  await ensureTaxExcludedColumns(sql);
+  // Mirror the production boot order: collapse myfinance_people to the thin spine link so the
+  // people wrapper (spine-backed) addresses the same shape it does at runtime.
+  await migratePersonSpine({ suite: sql });
   return raw;
 }

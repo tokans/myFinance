@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Pencil, Archive, ArchiveRestore, CalendarCheck, Trash2, GitMerge, X, Wand2, Upload, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Plus, Pencil, Archive, ArchiveRestore, CalendarCheck, Trash2, GitMerge, X, Wand2, Upload, Search, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AccountForm } from "@/components/accounts/AccountForm";
 import { SipChip } from "@/components/accounts/SipChip";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { isTauri } from "@/lib/environment";
-import { currentMonth, formatMoney } from "@/lib/format";
+import { currentMonth, formatMoney, formatMonthLabel } from "@/lib/format";
 import { useSettingsStore } from "@/stores/settings.store";
 import {
   archiveAccount,
@@ -17,6 +18,7 @@ import {
   createAccount,
   listAccounts,
   mergeAccounts,
+  setAccountCustomerId,
   setAccountInstitution,
   setAccountType,
   updateAccount,
@@ -24,17 +26,19 @@ import {
   type AccountInput,
 } from "@/db/accounts";
 import { clearAllSnapshots, countSnapshots } from "@/db/snapshots";
+import { latestSnapshotPerAccount } from "@/db/aggregates";
 import { ACCOUNT_TYPES, accountTypeKind, accountTypeLabel, type AccountType } from "@/lib/accountTypes";
-import { inferAccountTypeForName, inferInstitution } from "@/lib/institutions";
+import { extractCustomerIdFromName, inferAccountTypeForName, inferInstitution } from "@/lib/institutions";
 import { useGatingStore } from "@/stores/gating.store";
 
 /**
  * A single proposed auto-detect change. The bulk "Auto-type" tool re-derives an
- * account's type *and* institution from its name. A row is shown when the type
- * would change or an institution can be filled in; the user can adjust either
- * before applying. `institutionProposed` records that a suggestion was offered
- * (only when the account had no institution), so the inline input still renders
- * after the user clears the suggested value to skip it.
+ * account's type, institution, *and* customer ID from its name. A row is shown
+ * when the type would change or an institution/customer ID can be filled in;
+ * the user can adjust any of them before applying. `institutionProposed` /
+ * `customerIdProposed` record that a suggestion was offered (only when the
+ * account had none), so the inline input still renders after the user clears
+ * the suggested value to skip it.
  */
 interface AutoFixRow {
   id: number;
@@ -43,12 +47,17 @@ interface AutoFixRow {
   type: AccountType;
   institutionProposed: boolean;
   institution: string;
+  customerIdProposed: boolean;
+  customerId: string;
 }
 
 export function AccountsPage() {
   const currency = useSettingsStore((s) => s.settings.currency);
   const refreshGating = useGatingStore((s) => s.refresh);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  // account_id → most recent snapshot, so cards show the current balance rather
+  // than the (stale) opening balance. Excludes archived accounts (see aggregates).
+  const [latest, setLatest] = useState<Map<number, { value: number; month: string }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -66,6 +75,9 @@ export function AccountsPage() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<AccountType | "all">("all");
   const [institutionFilter, setInstitutionFilter] = useState("all");
+  const [searchParams] = useSearchParams();
+  const editParam = searchParams.get("edit");
+  const appliedEditParam = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isTauri()) {
@@ -75,14 +87,16 @@ export function AccountsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [rows, snaps, accts] = await Promise.all([
+      const [rows, snaps, accts, latestRows] = await Promise.all([
         listAccounts({ includeArchived: showArchived }),
         countSnapshots(),
         countAccounts(),
+        latestSnapshotPerAccount(),
       ]);
       setAccounts(rows);
       setSnapshotCount(snaps);
       setAccountCount(accts);
+      setLatest(new Map(latestRows.map((r) => [r.account_id, { value: r.value, month: r.month }])));
       // Account count and emergency-action presence gate Tax / Emergency Planning.
       void refreshGating();
     } catch (e) {
@@ -147,11 +161,13 @@ export function AccountsPage() {
     await refresh();
   };
 
-  // Propose type and institution fills for every account whose name implies a
-  // better type or a (currently missing) institution. Mirrors the add/edit
-  // form's auto-detect: type via inferAccountTypeForName (which also leans on
-  // the matched institution), institution via inferInstitution — but only filled
-  // when the account has none, so a user-typed institution is never clobbered.
+  // Propose type, institution, and customer-ID fills for every account whose
+  // name implies a better type or a (currently missing) institution/customer
+  // ID. Mirrors the add/edit form's auto-detect: type via
+  // inferAccountTypeForName (which also leans on the matched institution),
+  // institution via inferInstitution, customer ID via extractCustomerIdFromName
+  // (a trailing "(12345)" in the name) — but institution/customer ID are only
+  // filled when the account has none, so a user-typed value is never clobbered.
   const previewAutoType = async () => {
     setError(null);
     try {
@@ -160,6 +176,8 @@ export function AccountsPage() {
         .map((a): AutoFixRow => {
           const hasInstitution = !!a.institution?.trim();
           const inferredInstitution = hasInstitution ? null : inferInstitution(a.name);
+          const hasCustomerId = !!a.customer_id?.trim();
+          const inferredCustomerId = hasCustomerId ? null : extractCustomerIdFromName(a.name);
           return {
             id: a.id,
             name: a.name,
@@ -167,23 +185,25 @@ export function AccountsPage() {
             type: inferAccountTypeForName(a.name) ?? a.type,
             institutionProposed: inferredInstitution != null,
             institution: inferredInstitution ?? "",
+            customerIdProposed: inferredCustomerId != null,
+            customerId: inferredCustomerId ?? "",
           };
         })
-        .filter((c) => c.type !== c.typeFrom || c.institutionProposed);
+        .filter((c) => c.type !== c.typeFrom || c.institutionProposed || c.customerIdProposed);
       setAutoTypePreview(changes);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const setAutoTypeRow = (id: number, patch: Partial<Pick<AutoFixRow, "type" | "institution">>) => {
+  const setAutoTypeRow = (id: number, patch: Partial<Pick<AutoFixRow, "type" | "institution" | "customerId">>) => {
     setAutoTypePreview((prev) => prev && prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
   // A row writes something when its type differs from the original or it carries
-  // a non-blank institution to fill in.
+  // a non-blank institution/customer ID to fill in.
   const autoFixCount = (rows: AutoFixRow[]) =>
-    rows.filter((c) => c.type !== c.typeFrom || c.institution.trim() !== "").length;
+    rows.filter((c) => c.type !== c.typeFrom || c.institution.trim() !== "" || c.customerId.trim() !== "").length;
 
   const applyAutoType = async () => {
     if (!autoTypePreview) return;
@@ -195,6 +215,8 @@ export function AccountsPage() {
         if (c.type !== c.typeFrom) await setAccountType(c.id, c.type);
         const institution = c.institution.trim();
         if (institution) await setAccountInstitution(c.id, institution);
+        const customerId = c.customerId.trim();
+        if (customerId) await setAccountCustomerId(c.id, customerId);
       }
       setAutoTypePreview(null);
       await refresh();
@@ -243,15 +265,47 @@ export function AccountsPage() {
     setInstitutionFilter("all");
   };
 
+  // The edit form renders inline within the (potentially long) account list —
+  // scroll it into view whenever it mounts (opened via the pencil icon, or via
+  // the `?edit=` deep link below) so it doesn't look like nothing happened.
+  const scrollEditingIntoView = (el: HTMLLIElement | null) => {
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  // Deep-link support (e.g. "add a customer ID" from the statement importer,
+  // linking to `/accounts?edit=<id>`): jump straight into that account's edit
+  // form instead of landing on the plain list. Archived accounts are excluded
+  // from `listAccounts` by default, so force them in too. Applied once per
+  // `edit` value (`appliedEditParam`) so cancelling the form doesn't reopen it.
+  useEffect(() => {
+    if (editParam) setShowArchived(true);
+  }, [editParam]);
+
+  useEffect(() => {
+    if (!editParam || appliedEditParam.current === editParam) return;
+    const id = Number(editParam);
+    if (!Number.isFinite(id)) return;
+    const acct = accounts.find((a) => a.id === id);
+    if (!acct) return;
+    appliedEditParam.current = editParam;
+    setAdding(false);
+    setSelectMode(false);
+    clearFilters();
+    setEditing(acct);
+  }, [editParam, accounts]);
+
   return (
     <div className="container max-w-4xl py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Accounts</h2>
-          <p className="text-sm text-muted-foreground">Bank accounts, cards, investments, loans.</p>
-        </div>
-        <div className="flex gap-2">
-          {selectMode ? (
+      <PageHeader
+        title="Accounts"
+        description="Bank accounts, cards, investments, loans."
+        // Arrived via the "add a customer ID" deep link from the statement importer
+        // (`?edit=<id>`) — offer a way straight back to it instead of stranding the
+        // user on the plain accounts list once they're done editing.
+        backTo={editParam ? "/import/statement-pdf" : undefined}
+        backLabel="Back to import statement"
+        actions={
+          selectMode ? (
             <Button variant="ghost" onClick={exitSelectMode}>
               <X className="h-4 w-4" /> Cancel
             </Button>
@@ -279,13 +333,18 @@ export function AccountsPage() {
                   <Upload className="h-4 w-4" /> Import
                 </Link>
               </Button>
+              <Button asChild variant="outline" disabled={!isTauri()}>
+                <Link to="/transactions">
+                  <Receipt className="h-4 w-4" /> Transactions
+                </Link>
+              </Button>
               <Button data-testid="account-add-button" onClick={() => { setAdding(true); setEditing(null); }} disabled={!isTauri()}>
                 <Plus className="h-4 w-4" /> Add account
               </Button>
             </>
-          )}
-        </div>
-      </header>
+          )
+        }
+      />
 
       {selectMode && (
         <Card className="mb-4 border-primary/40 bg-primary/5">
@@ -352,6 +411,18 @@ export function AccountsPage() {
                             value={c.institution}
                             placeholder="(leave blank to skip)"
                             onChange={(e) => setAutoTypeRow(c.id, { institution: e.target.value })}
+                          />
+                        </div>
+                      )}
+                      {c.customerIdProposed && (
+                        <div className="flex items-center gap-2 pl-1 text-xs text-muted-foreground">
+                          <span>Customer ID</span>
+                          <span>→</span>
+                          <Input
+                            className="h-7 w-44 text-xs"
+                            value={c.customerId}
+                            placeholder="(leave blank to skip)"
+                            onChange={(e) => setAutoTypeRow(c.id, { customerId: e.target.value })}
                           />
                         </div>
                       )}
@@ -465,7 +536,10 @@ export function AccountsPage() {
       ) : (
         <ul className="space-y-2" data-testid="accounts-list">
           {visibleAccounts.map((acc) => (
-            <li key={acc.id}>
+            <li
+              key={acc.id}
+              ref={editing?.id === acc.id ? scrollEditingIntoView : undefined}
+            >
               {editing?.id === acc.id ? (
                 <AccountForm
                   initial={acc}
@@ -476,6 +550,7 @@ export function AccountsPage() {
               ) : (
                 <AccountRow
                   account={acc}
+                  latest={latest.get(acc.id) ?? null}
                   selectMode={selectMode}
                   selected={selectedIds.includes(acc.id)}
                   onToggleSelect={() => toggleSelected(acc.id)}
@@ -557,6 +632,7 @@ export function AccountsPage() {
 
 function AccountRow({
   account,
+  latest,
   selectMode,
   selected,
   onToggleSelect,
@@ -564,6 +640,7 @@ function AccountRow({
   onArchive,
 }: {
   account: Account;
+  latest: { value: number; month: string } | null;
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -586,7 +663,10 @@ function AccountRow({
         <SipChip account={account} />
       </div>
       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-        {account.institution ?? "—"} · Opening {formatMoney(account.opening_balance, account.currency)}
+        {account.institution ?? "—"} ·{" "}
+        {latest
+          ? `${formatMoney(latest.value, account.currency)} · as of ${formatMonthLabel(latest.month)}`
+          : `Opening ${formatMoney(account.opening_balance, account.currency)}`}
       </p>
     </>
   );

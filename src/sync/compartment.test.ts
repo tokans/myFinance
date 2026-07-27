@@ -51,23 +51,25 @@ describe("compartment-aware sync (receive side: localUserId)", () => {
   });
 
   it("skips a foreign member's private row on ingest when localUserId is set", async () => {
+    // people is the THIN spine link now (person_key, no identity columns) — used here purely as
+    // a compartment-tagged carrier row; identity travels on the core spine, not this table.
     const bundle = peopleBundle(A_ID, [
-      { sync_id: "p-shared", name: "Shared Contact", access_tier: 0, created_at: '2026-06-12 09:00:00', compartment: "shared", updated_at: "2026-06-12 09:00:00" },
-      { sync_id: "p-mine", name: "My Private", access_tier: 0, created_at: '2026-06-12 09:00:00', compartment: "private:bob", updated_at: "2026-06-12 09:00:00" },
-      { sync_id: "p-theirs", name: "Alice Private", access_tier: 0, created_at: '2026-06-12 09:00:00', compartment: "private:alice", updated_at: "2026-06-12 09:00:00" },
+      { sync_id: "p-shared", person_key: "mf-shared", created_at: '2026-06-12 09:00:00', compartment: "shared", updated_at: "2026-06-12 09:00:00" },
+      { sync_id: "p-mine", person_key: "mf-mine", created_at: '2026-06-12 09:00:00', compartment: "private:bob", updated_at: "2026-06-12 09:00:00" },
+      { sync_id: "p-theirs", person_key: "mf-theirs", created_at: '2026-06-12 09:00:00', compartment: "private:alice", updated_at: "2026-06-12 09:00:00" },
     ]);
     const summary = await applyBundle(B.sync, bundle, { localDeviceId: B_ID, localUserId: "bob" });
 
-    const names = B.all<{ name: string }>(`SELECT name FROM ${T.people} ORDER BY name`).map((r) => r.name);
+    const keys = B.all<{ person_key: string }>(`SELECT person_key FROM ${T.people} ORDER BY person_key`).map((r) => r.person_key);
     // Shared + bob's own private land; alice's private is skipped for bob.
-    expect(names).toEqual(["My Private", "Shared Contact"]);
+    expect(keys).toEqual(["mf-mine", "mf-shared"]);
     expect(summary.skipped).toBeGreaterThanOrEqual(1);
   });
 
   it("INERT for single-user: without localUserId, every row applies (pre-K4 behavior)", async () => {
     const bundle = peopleBundle(A_ID, [
-      { sync_id: "p-shared", name: "Shared", access_tier: 0, created_at: '2026-06-12 09:00:00', compartment: "shared", updated_at: "2026-06-12 09:00:00" },
-      { sync_id: "p-theirs", name: "Alice Private", access_tier: 0, created_at: '2026-06-12 09:00:00', compartment: "private:alice", updated_at: "2026-06-12 09:00:00" },
+      { sync_id: "p-shared", person_key: "mf-shared", created_at: '2026-06-12 09:00:00', compartment: "shared", updated_at: "2026-06-12 09:00:00" },
+      { sync_id: "p-theirs", person_key: "mf-theirs", created_at: '2026-06-12 09:00:00', compartment: "private:alice", updated_at: "2026-06-12 09:00:00" },
     ]);
     await applyBundle(B.sync, bundle, { localDeviceId: B_ID });
     const count = B.all<{ n: number }>(`SELECT COUNT(*) n FROM ${T.people}`)[0].n;
@@ -76,7 +78,7 @@ describe("compartment-aware sync (receive side: localUserId)", () => {
 
   it("untagged rows (no compartment column) always apply (treated as shared)", async () => {
     const bundle = peopleBundle(A_ID, [
-      { sync_id: "p-1", name: "Untagged", access_tier: 0, created_at: '2026-06-12 09:00:00', updated_at: "2026-06-12 09:00:00" },
+      { sync_id: "p-1", person_key: "mf-1", created_at: '2026-06-12 09:00:00', updated_at: "2026-06-12 09:00:00" },
     ]);
     await applyBundle(B.sync, bundle, { localDeviceId: B_ID, localUserId: "bob" });
     const count = B.all<{ n: number }>(`SELECT COUNT(*) n FROM ${T.people}`)[0].n;
@@ -87,15 +89,15 @@ describe("compartment-aware sync (receive side: localUserId)", () => {
 describe("compartment-aware sync (send side: recipientUserId)", () => {
   it("INERT for single-user: buildBundle without recipientUserId emits all rows", async () => {
     const A = await device(A_ID);
-    A.db.exec(`INSERT INTO ${T.people} (name, relationship) VALUES ('Alice', 'spouse')`);
-    A.db.exec(`INSERT INTO ${T.people} (name, relationship) VALUES ('Bob', 'self')`);
+    A.db.exec(`INSERT INTO ${T.people} (person_key) VALUES ('mf-alice')`);
+    A.db.exec(`INSERT INTO ${T.people} (person_key) VALUES ('mf-bob')`);
     const bundle = await buildBundle(A.sync, { deviceId: A_ID, createdAt: "2026-06-12 10:00:00" });
     expect((bundle.tables.people ?? []).length).toBe(2);
   });
 
   it("with recipientUserId set, untagged (shared) rows still travel — inert until rows are tagged", async () => {
     const A = await device(A_ID);
-    A.db.exec(`INSERT INTO ${T.people} (name, relationship) VALUES ('Alice', 'spouse')`);
+    A.db.exec(`INSERT INTO ${T.people} (person_key) VALUES ('mf-alice')`);
     const bundle = await buildBundle(A.sync, {
       deviceId: A_ID,
       createdAt: "2026-06-12 10:00:00",

@@ -1,6 +1,7 @@
 use argon2::{Argon2, Algorithm, Params, Version};
 
 mod core_bootstrap;
+mod statement_pdf;
 mod sync;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -33,6 +34,8 @@ pub fn run() {
             core_bootstrap::shared_core_db_path,
             core_bootstrap::legacy_db_exists,
             core_bootstrap::legacy_db_remove,
+            statement_pdf::parse_statement_pdf,
+            statement_pdf::extract_zip_entry,
         ])
         .setup(|_app| {
             // L2 shared-core bootstrap: lay down or reuse the per-user suite dir

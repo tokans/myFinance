@@ -162,9 +162,20 @@ async function countRows(db: SqlDb, table: string): Promise<number> {
   return Number(r?.n ?? 0);
 }
 
-async function sampleRows(db: SqlDb, table: string, keyColumns: string[]): Promise<Record<string, unknown>[]> {
+/**
+ * `columns` restricts the SELECT to exactly the legacy table's own columns (rather
+ * than `SELECT *`) so a suite-only column added to a table AFTER the legacy schema
+ * was frozen (e.g. a new descriptor field with no counterpart in the retired
+ * `src-tauri/migrations/*.sql` files) doesn't make every future verify fail —
+ * consolidation only promises the legacy content copied verbatim, not that the two
+ * schemas are column-for-column identical.
+ */
+async function sampleRows(
+  db: SqlDb, table: string, keyColumns: string[], columns?: string[],
+): Promise<Record<string, unknown>[]> {
   const order = keyColumns.map(ident).join(", ");
-  return db.select(`SELECT * FROM ${ident(table)} ORDER BY ${order} LIMIT ${CHECKSUM_SAMPLE_LIMIT}`);
+  const select = columns && columns.length ? columns.map(ident).join(", ") : "*";
+  return db.select(`SELECT ${select} FROM ${ident(table)} ORDER BY ${order} LIMIT ${CHECKSUM_SAMPLE_LIMIT}`);
 }
 
 /** Does a table exist in this DB? (Older legacy installs may pre-date some migrations.) */
@@ -200,8 +211,9 @@ async function copyTable(
   if (suiteCount !== rows.length) {
     throw new Error(`consolidation verify failed for ${spec.legacy}: copied ${suiteCount} of ${rows.length} rows`);
   }
+  const legacyColumns = rows.length ? Object.keys(rows[0]!) : undefined;
   const legacyChecksum = checksumRows(rows.slice(0, CHECKSUM_SAMPLE_LIMIT));
-  const suiteChecksum = checksumRows(await sampleRows(suite, spec.suite, spec.keyColumns));
+  const suiteChecksum = checksumRows(await sampleRows(suite, spec.suite, spec.keyColumns, legacyColumns));
   if (legacyChecksum !== suiteChecksum) {
     throw new Error(`consolidation verify failed for ${spec.legacy}: checksum ${legacyChecksum} != ${suiteChecksum}`);
   }

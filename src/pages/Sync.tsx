@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { isTauri } from "@/lib/environment";
 import { useVaultStore } from "@/stores/vault.store";
 import { exportEncryptedBundle, importEncryptedBundle, type ImportResult } from "@/sync";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 // ── Tauri command wrappers ────────────────────────────────────────────────
 // Bytes cross the IPC boundary as plain number[] (reliable Vec<u8> mapping).
@@ -248,12 +249,10 @@ export function SyncPage() {
 
 function Header() {
   return (
-    <header className="mb-6">
-      <h2 className="text-2xl font-semibold tracking-tight">Sync devices</h2>
-      <p className="text-sm text-muted-foreground">
-        Merge this device&apos;s data with another over your local Wi-Fi. Two-way: newer edits win, deletions carry across.
-      </p>
-    </header>
+    <PageHeader
+      title="Sync devices"
+      description="Merge this device's data with another over your local Wi-Fi. Two-way: newer edits win, deletions carry across."
+    />
   );
 }
 

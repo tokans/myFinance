@@ -73,7 +73,8 @@ export const MYFINANCE_LEGACY_SCHEMAS: SchemaDescriptor[] = [
       { name: "type", dataType: "enum", required: true, description: "account type", constraints: { enumValues: [
         "bank_savings", "checking", "cash", "fixed_deposit", "recurring_deposit",
         "ppf", "epf", "nps", "stocks", "mutual_funds", "etf", "bonds", "pms_aif",
-        "gold", "real_estate", "crypto", "loan", "credit_card", "insurance", "tax_refund", "other"] } },
+        "gold", "real_estate", "crypto", "loan", "credit_card", "insurance", "tax_refund", "other",
+        "loan_given", "art_collectible", "vehicle"] } },
       { name: "institution", dataType: "string", description: "bank/AMC/issuer name" },
       { name: "currency", dataType: "string", description: "ISO currency code" },
       { name: "opening_balance", dataType: "number", description: "opening balance" },
@@ -89,6 +90,45 @@ export const MYFINANCE_LEGACY_SCHEMAS: SchemaDescriptor[] = [
       { name: "sip_day", dataType: "number", description: "SIP debit day-of-month (mutual funds)" },
       { name: "sip_amount", dataType: "number", description: "SIP installment amount" },
       { name: "sip_last_done", dataType: "date", description: "last SIP occurrence marked done (YYYY-MM-DD)" },
+      { name: "customer_id", dataType: "string", personalData: true, purpose: "Bank customer/CIF ID — many banks build the statement PDF password from it, so it's remembered here instead of asked on every import.", description: "bank customer/CIF ID" },
+      { name: "is_family", dataType: "boolean", description: "marks the account as belonging to a family member rather than the primary user — grouped separately on the Dashboard regardless of its type category" },
+      { name: "family_relation", dataType: "enum", description: "minor | adult — only meaningful when is_family is set; a minor's account income can be clubbed into the primary filer's tax return (Sec 64(1A)), an adult's never is", constraints: { enumValues: ["minor", "adult"] } },
+    ]),
+
+  table("Transactions", "myfinance_transactions", "Confidential",
+    "Per-transaction rows parsed from a bank/credit-card statement import, one per account (desktop-only feature). Self-transfer match state is device-local — never synced (see auxSql.ts/sync/spec.ts). Categorization now lives on TransactionTags (a transaction can carry multiple tags) — the category/category_source columns below are LEGACY: left physically in place (never dropped from a populated user table) but no longer read or written by any app code.", [
+      id,
+      { name: "account_id", dataType: "id", required: true, description: "FK → myfinance_accounts.id (ON DELETE CASCADE)" },
+      { name: "date", dataType: "date", description: "YYYY-MM-DD, null if the statement's date string couldn't be parsed" },
+      { name: "raw_date", dataType: "string", description: "the date exactly as printed on the statement" },
+      { name: "description", dataType: "string", personalData: true, purpose: "Bank narration text, kept to build the per-account transaction ledger and suggest tags.", description: "transaction narration" },
+      { name: "debit", dataType: "number", description: "amount out, or null" },
+      { name: "credit", dataType: "number", description: "amount in, or null" },
+      { name: "balance", dataType: "number", description: "running balance after this row, or null" },
+      { name: "category", dataType: "string", description: "LEGACY, unused — superseded by TransactionTags" },
+      { name: "category_source", dataType: "enum", description: "LEGACY, unused — superseded by TransactionTags", constraints: { enumValues: ["auto", "manual"] } },
+      { name: "matched_transaction_id", dataType: "id", description: "self-FK → another myfinance_transactions.id (self-transfer counterpart); device-local, not synced" },
+      { name: "match_status", dataType: "enum", description: "none | suggested | confirmed | dismissed", constraints: { enumValues: ["none", "suggested", "confirmed", "dismissed"] } },
+      { name: "source_path", dataType: "string", description: "e.g. 'STATEMENT:<filename>' — which import wrote this row" },
+      createdAt, syncId, updatedAt,
+    ]),
+
+  table("TransactionTags", "myfinance_transaction_tags", "Confidential",
+    "Per-transaction category tags (a transaction can carry more than one — e.g. a UPI grocery payment tagged both 'upi_payment' and 'groceries'). Replaces the old single category/category_source columns on Transactions (left physically in place, no longer read/written, see auxSql.ts).", [
+      id,
+      { name: "transaction_id", dataType: "id", required: true, description: "FK → myfinance_transactions.id (ON DELETE CASCADE)" },
+      { name: "category", dataType: "string", required: true, description: "transaction_category master value" },
+      { name: "source", dataType: "enum", required: true, description: "auto | manual", constraints: { enumValues: ["auto", "manual"] } },
+      createdAt, syncId, updatedAt,
+    ]),
+
+  table("CategoryRules", "myfinance_category_rules", "Confidential",
+    "Learned narration→category mappings taught by the user's own manual tagging — kept independently of the transaction rows that taught them, so a merchant/payee once tagged auto-tags identically on every future import even after those rows are deleted or the statement is re-imported (see domain/transactionCategory.ts's suggestCategoryTagsWithRules and db/categoryRules.ts). One pattern can teach multiple categories (e.g. a UPI narration pattern learned as both 'upi_payment' and 'groceries').", [
+      id,
+      { name: "pattern", dataType: "string", required: true, personalData: true, purpose: "Digit-collapsed bank narration fragment the user has classified before, kept to auto-classify future imports of the same recurring merchant/payee.", description: "normalize()'d narration key (see transactionCategory.ts)" },
+      { name: "category", dataType: "string", required: true, description: "transaction_category master value this pattern maps to" },
+      { name: "hit_count", dataType: "number", description: "number of times this (pattern, category) pair has been (re)taught — informational only" },
+      createdAt, updatedAt,
     ]),
 
   table("MonthlySnapshots", "myfinance_monthly_snapshot", "Confidential",
@@ -135,6 +175,7 @@ export const MYFINANCE_LEGACY_SCHEMAS: SchemaDescriptor[] = [
       { name: "amount", dataType: "number", required: true, personalData: true, purpose: "The user's income detail, kept to compute and review tax.", description: "amount" },
       { name: "source_path", dataType: "string", description: "JSON path when imported" },
       { name: "note", dataType: "string", description: "note" },
+      { name: "excluded", dataType: "boolean", description: "set by the reconciliation screen when this row is confirmed to duplicate another source document's row — excluded from totals, not deleted" },
       syncId, updatedAt,
     ]),
 
@@ -159,6 +200,7 @@ export const MYFINANCE_LEGACY_SCHEMAS: SchemaDescriptor[] = [
       { name: "amount", dataType: "number", required: true, personalData: true, purpose: "The user's tax-payment detail, kept to compute and review tax.", description: "amount" },
       { name: "source_path", dataType: "string", description: "JSON path when imported" },
       { name: "note", dataType: "string", description: "note" },
+      { name: "excluded", dataType: "boolean", description: "set by the reconciliation screen when this row is confirmed to duplicate another source document's row — excluded from totals, not deleted" },
       syncId, updatedAt,
     ]),
 
@@ -186,6 +228,53 @@ export const MYFINANCE_LEGACY_SCHEMAS: SchemaDescriptor[] = [
       updatedAt,
     ]),
 
+  table("AisSft", "myfinance_ais_sft", "Confidential",
+    "SFT (Statement of Financial Transaction) rows read from the AIS Utility JSON — large-value transactions banks/registrars/AMCs report to the tax department, kept separately from income/TDS (which are sourced from tdsTcs, not sft, to avoid double-counting) so they can be cross-checked against the bank transaction ledger.", [
+      id,
+      { name: "ay", dataType: "string", required: true, description: "FK → myfinance_tax_years.ay" },
+      { name: "sft_code", dataType: "string", description: "e.g. 'SFT-005'" },
+      { name: "description", dataType: "string", personalData: true, purpose: "Identify the reported transaction category for the user's SFT cross-check.", description: "information description" },
+      { name: "reporting_entity", dataType: "string", personalData: true, purpose: "Identify who reported this transaction (bank/registrar/AMC) for the user's SFT cross-check.", description: "reporting bank/registrar/AMC name" },
+      { name: "amount", dataType: "number", required: true, personalData: true, purpose: "The user's reported transaction amount, kept to cross-check against bank data.", description: "amount" },
+      { name: "date", dataType: "date", description: "usually null — SFT rows are typically FY-level aggregates" },
+      syncId, updatedAt,
+    ]),
+
+  table("TaxRefunds", "myfinance_tax_refunds", "Confidential",
+    "Refunds already issued, read from AIS/TIS PDF Part B4 (see tax/categoryAmountPdf.ts's extractRefundRows) — informational, not folded into tax_assessment's totals.", [
+      id,
+      { name: "ay", dataType: "string", required: true, description: "FK → myfinance_tax_years.ay" },
+      { name: "amount", dataType: "number", required: true, personalData: true, purpose: "The user's refund amount, for their own tax-year review.", description: "refund amount" },
+      { name: "mode", dataType: "string", description: "e.g. 'ECS'" },
+      { name: "refund_date", dataType: "date", description: "date of payment" },
+      { name: "source_path", dataType: "string", description: "which import produced this row, e.g. 'AIS-PDF'" },
+      { name: "note", dataType: "string", personalData: true, purpose: "Nature-of-refund text from the source document.", description: "free-text note" },
+      syncId, updatedAt,
+    ]),
+
+  table("TaxCaComputation", "myfinance_tax_ca_computation", "Confidential",
+    "Line items read from the user's Chartered Accountant's own tax computation sheet (see tax/caComputation.ts) — a freeform label/amount table, kept entirely separate from tax_income/tax_deductions/tax_payments so it can serve as an independent check (tax/caReconciliation.ts) rather than feeding this app's own computed figures.", [
+      id,
+      { name: "ay", dataType: "string", required: true, description: "FK → myfinance_tax_years.ay" },
+      { name: "label", dataType: "string", personalData: true, purpose: "The CA document's own line-item label, kept for the user's side-by-side reconciliation review.", required: true, description: "line-item label as written in the CA's document" },
+      { name: "amount", dataType: "number", personalData: true, purpose: "The CA document's own figure for this line item, for the user's own reconciliation review — never transmitted anywhere.", required: true, description: "line-item amount" },
+      { name: "source_path", dataType: "string", description: "which import produced this row, e.g. 'CACalc-PDF'" },
+      { name: "note", dataType: "string", personalData: true, purpose: "Free-text note carried from the source document.", description: "free-text note" },
+      syncId, updatedAt,
+    ]),
+
+  table("ReconLinks", "myfinance_recon_links", "Confidential",
+    "General 'these two records represent/might represent the same real-world event' link (bank transaction <-> tax document row, or tax document row <-> tax document row across different source documents) — generalizes the self-transfer match pattern. Device-local by design: a_kind/a_id + b_kind/b_id is a polymorphic reference the single-pass sync merge engine can't safely remap across devices, same reasoning as transactions.matched_transaction_id; each device recomputes and reviews its own candidates.", [
+      id,
+      { name: "a_kind", dataType: "string", required: true, description: "'transaction'|'tax_income'|'tax_payment'|'ais_sft'|'tax_refund'" },
+      { name: "a_id", dataType: "id", required: true, description: "local rowid into whichever table a_kind names" },
+      { name: "b_kind", dataType: "string", required: true, description: "same vocabulary as a_kind" },
+      { name: "b_id", dataType: "id", required: true, description: "local rowid into whichever table b_kind names" },
+      { name: "status", dataType: "string", required: true, description: "'suggested'|'confirmed'|'dismissed'" },
+      { name: "note", dataType: "string", description: "free-text note" },
+      createdAt, updatedAt,
+    ]),
+
   table("CustomOptions", "myfinance_custom_options", "Internal",
     "User-added 'Other' values for finite-set inputs (country/city/institution/…).", [
       id,
@@ -197,17 +286,21 @@ export const MYFINANCE_LEGACY_SCHEMAS: SchemaDescriptor[] = [
     ]),
 
   table("People", "myfinance_people", "Confidential",
-    "Finance/estate contact hub: nominees, executors, attorneys, claims contacts. Bridged (not duplicated) to the shared person spine via myfinance#PersonFacet + entities dual-write — the integer id is the app-local relational key the estate tables join on.", [
+    "THIN spine link, not an identity table (invariant 6, finding 2.1). Identity (name/relationship/phone/email) lives ONCE on common#Person; finance estate fields (access_tier/id_proof_ref/notes) live on myfinance#PersonFacet — both keyed by person_key. This table only maps myFinance's historical integer id (the relational key every estate table's FK joins on) to a person_key, so holdings/will_meta/incapacity_meta/insurance/access_grants references survive untouched.", [
       id,
-      { name: "name", dataType: "string", required: true, personalData: true, purpose: "Identify the contact for estate/emergency actions.", description: "person name" },
-      { name: "relationship", dataType: "string", description: "relationship to the user" },
-      { name: "phone", dataType: "string", personalData: true, purpose: "Reach the contact in an emergency or estate claim.", description: "phone" },
-      { name: "email", dataType: "string", personalData: true, purpose: "Reach the contact in an emergency or estate claim.", description: "email" },
-      { name: "id_proof_ref", dataType: "string", confidentiality: "Restricted", personalData: true, purpose: "Locate the person's identity proof for estate claims.", description: "id-proof reference" },
-      { name: "access_tier", dataType: "number", description: "progressive-access tier (0/1/2)", constraints: { min: 0, max: 2 } },
-      { name: "notes", dataType: "string", personalData: true, purpose: "Estate-readiness note about this person.", description: "free-text notes" },
+      { name: "person_key", dataType: "id", required: true, index: "Unique", description: "shared person key on common#Person (same key as the myfinance#PersonFacet row)" },
       createdAt, syncId, updatedAt,
-    ]),
+    ],
+    {
+      relationships: [
+        {
+          name: "person",
+          relationshipType: "Many-One",
+          relatedSchema: "common#Person",
+          description: "the shared identity this app-local id points at",
+        },
+      ],
+    }),
 
   table("Documents", "myfinance_documents", "Confidential",
     "Typed legal/financial document metadata (Will, PoA, policies, statements). Blobs live AES-GCM-sealed on disk, never here.", [

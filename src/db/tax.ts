@@ -1,7 +1,7 @@
 import { exec, query, T } from "./client";
 
 export type IncomeHead =
-  | "salary" | "house_property" | "other_sources"
+  | "salary" | "house_property" | "other_sources" | "dividend"
   | "cg_short" | "cg_long" | "business" | "exempt";
 
 export type PaymentType =
@@ -27,6 +27,13 @@ export interface TaxIncomeRow {
   amount: number;
   source_path: string | null;
   note: string | null;
+  /** Set by the reconciliation screen when the user confirms this row
+   *  duplicates another source document's row for the same real-world event
+   *  — excluded from totals but never deleted (audit trail stays intact).
+   *  `listIncome` filters this out by default; see `listIncomeAll`. Optional
+   *  like `sync_id`/`updated_at` (omitted from this interface entirely) are:
+   *  always populated on a real DB read, never set by an insert producer. */
+  excluded?: boolean;
 }
 
 export interface TaxDeductionRow {
@@ -47,6 +54,9 @@ export interface TaxPaymentRow {
   amount: number;
   source_path: string | null;
   note: string | null;
+  /** See `TaxIncomeRow.excluded`. `listPayments` filters this out by
+   *  default; see `listPaymentsAll`. */
+  excluded?: boolean;
 }
 
 export interface TaxAssessment {
@@ -121,14 +131,38 @@ export async function clearAllTax(): Promise<void> {
 
 // -------- Income/Deductions/Payments (CRUD + bulk replace per AY) --------
 
+/** Excludes rows the reconciliation screen has flagged as a confirmed
+ *  duplicate of another source document's row — the single change point that
+ *  keeps every consumer (Tax Detail's totals, the ITR builder, the return
+ *  page) from double-counting. See `listIncomeAll` for the unfiltered set. */
 export async function listIncome(ay: string): Promise<TaxIncomeRow[]> {
+  return query<TaxIncomeRow>(`SELECT * FROM ${T.taxIncome} WHERE ay = ? AND excluded = 0 ORDER BY id`, [ay]);
+}
+/** Every income row for the AY, including ones excluded via reconciliation —
+ *  for the reconciliation screen itself, which needs to show/toggle them. */
+export async function listIncomeAll(ay: string): Promise<TaxIncomeRow[]> {
   return query<TaxIncomeRow>(`SELECT * FROM ${T.taxIncome} WHERE ay = ? ORDER BY id`, [ay]);
 }
 export async function listDeductions(ay: string): Promise<TaxDeductionRow[]> {
   return query<TaxDeductionRow>(`SELECT * FROM ${T.taxDeductions} WHERE ay = ? ORDER BY id`, [ay]);
 }
+/** See `listIncome`'s doc comment — same `excluded` filtering. */
 export async function listPayments(ay: string): Promise<TaxPaymentRow[]> {
+  return query<TaxPaymentRow>(`SELECT * FROM ${T.taxPayments} WHERE ay = ? AND excluded = 0 ORDER BY id`, [ay]);
+}
+/** See `listIncomeAll`'s doc comment. */
+export async function listPaymentsAll(ay: string): Promise<TaxPaymentRow[]> {
   return query<TaxPaymentRow>(`SELECT * FROM ${T.taxPayments} WHERE ay = ? ORDER BY id`, [ay]);
+}
+
+/** Sets/clears the reconciliation-duplicate flag on one income or payment
+ *  row — called by `db/reconLinks.ts`'s `confirmLink` when the user confirms
+ *  a cross-document duplicate, and by the reconciliation screen's undo. */
+export async function setIncomeExcluded(id: number, excluded: boolean): Promise<void> {
+  await exec(`UPDATE ${T.taxIncome} SET excluded = ? WHERE id = ?`, [excluded ? 1 : 0, id]);
+}
+export async function setPaymentExcluded(id: number, excluded: boolean): Promise<void> {
+  await exec(`UPDATE ${T.taxPayments} SET excluded = ? WHERE id = ?`, [excluded ? 1 : 0, id]);
 }
 
 export async function insertIncome(row: Omit<TaxIncomeRow, "id">): Promise<void> {
@@ -150,10 +184,65 @@ export async function insertPayment(row: Omit<TaxPaymentRow, "id">): Promise<voi
   );
 }
 
-export async function clearImportedRows(ay: string): Promise<void> {
-  await exec(`DELETE FROM ${T.taxIncome} WHERE ay = ? AND source_path IS NOT NULL`, [ay]);
-  await exec(`DELETE FROM ${T.taxDeductions} WHERE ay = ? AND source_path IS NOT NULL`, [ay]);
-  await exec(`DELETE FROM ${T.taxPayments} WHERE ay = ? AND source_path IS NOT NULL`, [ay]);
+/**
+ * Reclassifies a misparsed income row as a tax payment — e.g. a TDS credit
+ * that a document's category text put under `other_sources` income instead
+ * of a `tds_other` payment. Inserts an equivalent payment row under the
+ * caller-picked `type` (there's no reliable automatic mapping from a head to
+ * a payment type, so the user chooses), carrying `label` over as
+ * `payer_name` and everything else (`amount`/`source_path`/`note`) as-is,
+ * then deletes the original. `excluded` intentionally resets to false — this
+ * is a fresh classification, not something the reconciliation matcher has
+ * reviewed yet. Does not touch `recon_links`, matching `clearRowsBySourcePrefix`/
+ * `clearAyRows`'s existing precedent of leaving any link pointing at a
+ * deleted row's old id to fall out of the recon screen naturally on its own
+ * (a link only matters once both sides are alive).
+ */
+export async function moveIncomeToPayment(id: number, type: PaymentType): Promise<void> {
+  const rows = await query<TaxIncomeRow>(`SELECT * FROM ${T.taxIncome} WHERE id = ?`, [id]);
+  const row = rows[0];
+  if (!row) return;
+  await insertPayment({
+    ay: row.ay, type, payer_name: row.label || null, amount: row.amount,
+    source_path: row.source_path, note: row.note,
+  });
+  await exec(`DELETE FROM ${T.taxIncome} WHERE id = ?`, [id]);
+}
+
+/** The reverse of `moveIncomeToPayment` — e.g. an advance-tax challan a
+ *  document's layout put under a payment type instead of `other_sources`
+ *  income. `payer_name` carries over as `label`. */
+export async function movePaymentToIncome(id: number, head: IncomeHead): Promise<void> {
+  const rows = await query<TaxPaymentRow>(`SELECT * FROM ${T.taxPayments} WHERE id = ?`, [id]);
+  const row = rows[0];
+  if (!row) return;
+  await insertIncome({
+    ay: row.ay, head, label: row.payer_name || "(moved from tax payment)", amount: row.amount,
+    source_path: row.source_path, note: row.note,
+  });
+  await exec(`DELETE FROM ${T.taxPayments} WHERE id = ?`, [id]);
+}
+
+/**
+ * Delete only the income/deductions/payments rows whose `source_path` starts
+ * with `prefix` (e.g. `"ITR."` for ITR-import rows, `"AIS:"` for AIS-import
+ * rows, `"MANUAL:"` for return-builder edits). Lets each importer replace its
+ * own rows on re-run without clobbering rows sourced elsewhere. The prefixes we
+ * use contain no LIKE metacharacters, so a plain `LIKE prefix || '%'` is safe.
+ */
+export async function clearRowsBySourcePrefix(ay: string, prefix: string): Promise<void> {
+  const pat = `${prefix}%`;
+  await exec(`DELETE FROM ${T.taxIncome} WHERE ay = ? AND source_path LIKE ?`, [ay, pat]);
+  await exec(`DELETE FROM ${T.taxDeductions} WHERE ay = ? AND source_path LIKE ?`, [ay, pat]);
+  await exec(`DELETE FROM ${T.taxPayments} WHERE ay = ? AND source_path LIKE ?`, [ay, pat]);
+}
+
+/** Delete every income/deduction/payment row for an AY (any source). Used by the
+ * return builder to replace the saved figures with the finalized-return figures. */
+export async function clearAyRows(ay: string): Promise<void> {
+  await exec(`DELETE FROM ${T.taxIncome} WHERE ay = ?`, [ay]);
+  await exec(`DELETE FROM ${T.taxDeductions} WHERE ay = ?`, [ay]);
+  await exec(`DELETE FROM ${T.taxPayments} WHERE ay = ?`, [ay]);
 }
 
 // -------- Assessment summary --------

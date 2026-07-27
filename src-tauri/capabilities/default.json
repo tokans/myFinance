@@ -12,6 +12,7 @@
       "identifier": "fs:allow-read-file",
       "allow": [{ "path": "$DOCUMENT/**" }, { "path": "$DOWNLOAD/**" }, { "path": "$APPDATA/**" }]
     },
+    "fs:allow-read-dir",
     {
       "identifier": "fs:allow-write-file",
       "allow": [{ "path": "$DOCUMENT/**" }, { "path": "$DOWNLOAD/**" }, { "path": "$APPDATA/**" }]
@@ -43,6 +44,7 @@
         { "url": "mailto:*" }
       ]
     },
+    "core:webview:allow-clear-all-browsing-data",
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",

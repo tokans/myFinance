@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Upload, AlertCircle, Check, FileSpreadsheet } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Upload, AlertCircle, Check, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { buildTemplateWorkbook, defaultTemplateFilename } from "@/excel/template
 import type {
   ColumnKind, CrossSheetPattern, SheetPlan, SheetPreview, SheetRaw,
 } from "@/excel/types";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 // The only spreadsheet formats the import pipeline supports. Drives both the
 // native dialog filter and the browser <input accept> fallback.
@@ -228,13 +230,17 @@ export function ImportPage() {
 
   return (
     <div className="container max-w-4xl py-6">
-      <header className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Import Excel</h2>
-        <p className="text-sm text-muted-foreground">
-          Multi-sheet workbook. Sheet name = month, column A = item, column B = value.
-          The wizard auto-detects this and only asks questions when needed.
-        </p>
-      </header>
+      <PageHeader
+        title="Import Excel"
+        description="Multi-sheet workbook. Sheet name = month, column A = item, column B = value. The wizard auto-detects this and only asks questions when needed."
+        actions={
+          <Button asChild variant="outline" disabled={!isTauri()}>
+            <Link to="/import/statement-pdf">
+              <FileText className="h-4 w-4" /> Import statement PDF
+            </Link>
+          </Button>
+        }
+      />
 
       {!isTauri() && (
         <Card className="mb-4 border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">

@@ -281,7 +281,7 @@ async function applyTombstones(db: SyncDb, bundle: Bundle, ctx: Ctx): Promise<vo
 export async function applyBundle(db: SyncDb, bundle: Bundle, opts: MergeOptions): Promise<MergeSummary> {
   const ctx: Ctx = {
     ...opts,
-    maps: { vault_entries: new Map(), accounts: new Map(), people: new Map(), documents: new Map() },
+    maps: { vault_entries: new Map(), accounts: new Map(), people: new Map(), documents: new Map(), transactions: new Map() },
     summary: { added: 0, updated: 0, skipped: 0, deleted: 0 },
   };
   for (const spec of SPEC) await processTable(db, spec, bundle, ctx);

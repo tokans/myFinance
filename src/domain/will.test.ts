@@ -24,7 +24,7 @@ describe("reconcileWillVsNominees", () => {
 describe("buildSimpleWill", () => {
   it("includes the testator, appointed roles, bequests and disclaimer", () => {
     const text = buildSimpleWill({
-      testatorName: "Anshuman Das",
+      testatorName: "Sample Person",
       place: "Mumbai",
       executorName: "Priya Sharma",
       guardianName: "Amit Das",
@@ -33,7 +33,7 @@ describe("buildSimpleWill", () => {
       date: "2026-05-31",
     });
     expect(text).toContain("LAST WILL AND TESTAMENT");
-    expect(text).toContain("Anshuman Das");
+    expect(text).toContain("Sample Person");
     expect(text).toContain("I appoint Priya Sharma as the executor");
     expect(text).toContain("guardian of my minor children");
     expect(text).toContain("my flat in Andheri");

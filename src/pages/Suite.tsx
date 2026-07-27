@@ -5,6 +5,7 @@ import { suiteCatalog } from "@/suite/catalog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 /**
  * The app marketplace ("More from this publisher"). Lists every app the publisher
@@ -51,16 +52,14 @@ export function SuitePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
-      <header className="space-y-1">
-        <div className="flex items-center gap-2">
-          <LayoutGrid className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold tracking-tight">More from Tokans</h1>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Other apps from the same publisher. Everything is local-first and receive-only —
-          installing is handled by your operating system.
-        </p>
-      </header>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <LayoutGrid className="h-5 w-5 text-primary" /> More from Tokans
+          </span>
+        }
+        description="Other apps from the same publisher. Everything is local-first and receive-only — installing is handled by your operating system."
+      />
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>

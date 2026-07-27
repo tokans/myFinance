@@ -24,6 +24,9 @@ import {
   Shield,
   MoreHorizontal,
   Receipt,
+  Handshake,
+  Palette,
+  Car,
   type LucideIcon,
 } from "lucide-react";
 import { LifeBuoy } from "lucide-react";
@@ -44,7 +47,7 @@ import {
   SPRITE_CELL_COUNT,
   spriteCellPosition,
 } from "@/lib/accountTypes";
-import { inferInstitution, inferAccountTypeForName } from "@/lib/institutions";
+import { inferInstitution, inferAccountTypeForName, extractCustomerIdFromName } from "@/lib/institutions";
 import type { Account, AccountInput, AccountType } from "@/db/accounts";
 
 /** Inline fallback icons, keyed to ACCOUNT_TYPES order, used until/if the
@@ -71,6 +74,9 @@ const FALLBACK_ICONS: Record<AccountType, LucideIcon> = {
   insurance: Shield,
   other: MoreHorizontal,
   tax_refund: Receipt,
+  loan_given: Handshake,
+  art_collectible: Palette,
+  vehicle: Car,
 };
 
 /** Probe whether the sprite asset exists so we can prefer it over lucide icons. */
@@ -108,6 +114,9 @@ const schema = z.object({
     .refine((v) => !v || (Number.isFinite(+v) && +v > 0), "Enter a positive amount"),
   contact: z.string().trim().max(200).optional(),
   emergency_action: z.string().trim().max(500).optional(),
+  customer_id: z.string().trim().max(64).optional(),
+  is_family: z.boolean().optional(),
+  family_relation: z.enum(["minor", "adult"]).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -141,6 +150,9 @@ export function AccountForm({ initial, defaultCurrency, onSubmit, onCancel, disa
       sip_amount: initial?.sip_amount != null ? String(initial.sip_amount) : "",
       contact: initial?.contact ?? "",
       emergency_action: initial?.emergency_action ?? "",
+      customer_id: initial?.customer_id ?? "",
+      is_family: !!initial?.is_family,
+      family_relation: initial?.family_relation === "minor" ? "minor" : "adult",
     },
   });
 
@@ -157,14 +169,19 @@ export function AccountForm({ initial, defaultCurrency, onSubmit, onCancel, disa
       sip_amount: values.type === "mutual_funds" && values.sip_amount ? Number(values.sip_amount) : null,
       contact: values.contact || null,
       emergency_action: values.emergency_action || null,
+      customer_id: values.customer_id || null,
+      is_family: values.is_family ?? false,
+      family_relation: values.is_family ? values.family_relation ?? "adult" : null,
     });
   });
 
   const typeValue = watch("type");
+  const isFamilyValue = watch("is_family");
   const nameValue = watch("name");
   const institutionValue = watch("institution");
   const emergencyActionValue = watch("emergency_action");
   const contactValue = watch("contact");
+  const customerIdValue = watch("customer_id");
   // Nudge: the action says "call/contact someone" but no contact is attached yet.
   const needsContact = mentionsContact(emergencyActionValue) && !contactValue?.trim();
 
@@ -194,6 +211,18 @@ export function AccountForm({ initial, defaultCurrency, onSubmit, onCancel, disa
       setValue("institution", inferred, { shouldValidate: true });
     }
   }, [nameValue, initial, institutionTouched, institutionValue, setValue]);
+
+  // Same idea for Customer ID: a name like "HDFC Savings (12345)" implies the
+  // customer ID is 12345 (common when users copy account numbers into the
+  // name). Only for NEW accounts, and only until the user edits the field.
+  const [customerIdTouched, setCustomerIdTouched] = useState(false);
+  useEffect(() => {
+    if (initial || customerIdTouched) return;
+    const inferred = extractCustomerIdFromName(nameValue);
+    if (inferred && inferred !== customerIdValue) {
+      setValue("customer_id", inferred, { shouldValidate: true });
+    }
+  }, [nameValue, initial, customerIdTouched, customerIdValue, setValue]);
 
   return (
     <form onSubmit={submit} className="space-y-4 rounded-lg border bg-card p-4">
@@ -311,6 +340,37 @@ export function AccountForm({ initial, defaultCurrency, onSubmit, onCancel, disa
         </div>
       )}
 
+      <div className="space-y-2 rounded-md border border-dashed p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="h-4 w-4 accent-primary" {...register("is_family")} />
+          This account belongs to a family member
+        </label>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Grouped separately on the Dashboard, under its own "Family" section — regardless of its type category.
+        </p>
+
+        {isFamilyValue && (
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs">Relationship</Label>
+            <div role="radiogroup" aria-label="Family relationship" className="flex gap-4 text-sm">
+              <label className="flex items-center gap-1.5">
+                <input type="radio" value="adult" className="h-4 w-4 accent-primary" {...register("family_relation")} />
+                Adult (other family member)
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="radio" value="minor" className="h-4 w-4 accent-primary" {...register("family_relation")} />
+                Minor child
+              </label>
+            </div>
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              A minor child's income can be clubbed into your own tax return (Sec 64(1A)) from the Tax section.
+              An adult family member's accounts are tracked here for net worth only and never touch your return.
+              Update this if a minor child turns 18.
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="institution">Institution <span className="text-muted-foreground">(optional)</span></Label>
@@ -332,6 +392,22 @@ export function AccountForm({ initial, defaultCurrency, onSubmit, onCancel, disa
             {...register("opening_balance")}
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="customer_id">
+          Customer ID <span className="text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
+          id="customer_id"
+          placeholder="e.g. 012345678"
+          {...register("customer_id", { onChange: () => setCustomerIdTouched(true) })}
+        />
+        {errors.customer_id && <p className="text-xs text-destructive">{errors.customer_id.message}</p>}
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Many banks build the statement PDF's password from the customer ID — save it here once and
+          future statement imports for this account won't need it typed in again.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-md border border-dashed p-3">
