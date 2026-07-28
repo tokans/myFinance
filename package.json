@@ -1,6 +1,6 @@
 {
   "name": "myfinance",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "deploy": "claude \"/deploy-release\"",
-    "prebuild": "npm --prefix ../sharedCoreLib run build",
+    "prebuild": "npm --prefix ../sharedCoreLib run build && npm --prefix ../sharedCoreLib/scandoc-lib run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
